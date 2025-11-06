@@ -117,6 +117,61 @@ class TimesFMForecaster(Forecaster):
                 forecast_quantile, dataframe, horizon
             )
 
+    def _get_last_date(self, dataframe: pd.DataFrame) -> pd.Timestamp:
+        """
+        Extract the last date from dataframe index.
+
+        Handles both DatetimeIndex and regular index that can be converted to datetime.
+
+        Args:
+            dataframe: Input pandas DataFrame
+
+        Returns:
+            pd.Timestamp: The last date in the index
+
+        Raises:
+            ValueError: If index cannot be converted to datetime
+        """
+        # Get the last index value
+        last_idx = dataframe.index[-1]
+
+        # Check if index is already a DatetimeIndex
+        if isinstance(dataframe.index, pd.DatetimeIndex):
+            return last_idx
+
+        # Check if it's a MultiIndex
+        if isinstance(dataframe.index, pd.MultiIndex):
+            # Try to find a date level in the MultiIndex
+            for level_idx in range(dataframe.index.nlevels):
+                level_values = dataframe.index.get_level_values(level_idx)
+                try:
+                    # Try to convert this level to datetime
+                    if isinstance(level_values, pd.DatetimeIndex):
+                        return level_values[-1]
+                    else:
+                        pd.to_datetime(level_values[-1])
+                        return pd.to_datetime(level_values[-1])
+                except (ValueError, TypeError):
+                    continue
+
+            raise ValueError(
+                f"Could not find a datetime level in MultiIndex. "
+                f"Index levels: {dataframe.index.names}. "
+                f"Please ensure your dataframe has a datetime index or "
+                f"a MultiIndex with at least one datetime level."
+            )
+
+        # Try to convert the last index value to datetime
+        try:
+            return pd.to_datetime(last_idx)
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"Could not parse index value '{last_idx}' as datetime. "
+                f"Index type: {type(dataframe.index).__name__}. "
+                f"Please ensure your dataframe has a datetime index. "
+                f"Original error: {str(e)}"
+            )
+
     def _format_point_forecast(
         self,
         forecast_point: np.ndarray,
@@ -137,7 +192,7 @@ class TimesFMForecaster(Forecaster):
         forecast_data = forecast_point.T
 
         # Generate future dates
-        last_date = pd.to_datetime(dataframe.index[-1])
+        last_date = self._get_last_date(dataframe)
         new_index = pd.date_range(
             start=last_date + pd.Timedelta(days=1),
             periods=horizon,
@@ -201,7 +256,7 @@ class TimesFMForecaster(Forecaster):
         forecast_data = np.array(forecast_data, dtype=object).T
 
         # Generate future dates
-        last_date = pd.to_datetime(dataframe.index[-1])
+        last_date = self._get_last_date(dataframe)
         new_index = pd.date_range(
             start=last_date + pd.Timedelta(days=1),
             periods=forecast_quantile_horizons,
