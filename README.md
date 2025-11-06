@@ -13,28 +13,7 @@ A flexible and extensible Python library for time series forecasting using Googl
 
 ## Installation
 
-### Important: Python Version Compatibility
-
-**TimesFM currently supports Python 3.10 - 3.11 only.**
-
-PyPI packages have the following constraints:
-- `timesfm==1.0.0`: Requires Python >=3.10, <3.11
-- `timesfm>=1.2.0`: Requires Python >=3.10, <3.12
-
-**If you're using Python 3.13**, you have two options:
-
-#### Option 1: Use Python 3.11 (Recommended)
-
-```bash
-# Create virtual environment with Python 3.11
-python3.11 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-#### Option 2: Install from GitHub Source (Experimental for Python 3.13)
+TimesFM is installed from GitHub source to support Python 3.13:
 
 ```bash
 pip install git+https://github.com/google-research/timesfm.git
@@ -43,10 +22,10 @@ pip install -r requirements.txt
 
 ### Requirements
 
-- **Python 3.11** (PyPI packages) or Python 3.13 (GitHub source)
+- Python 3.13+
 - pandas >= 2.0.0
 - numpy >= 1.24.0
-- timesfm >= 1.0.0 (uses TimesFM 2.5 model with torch backend)
+- timesfm (installed from GitHub)
 - torch >= 2.0.0
 - google-cloud-bigquery >= 3.10.0 (for BigQuery support)
 - At least 16GB RAM recommended for TimesFM
@@ -434,27 +413,15 @@ class CustomOutputWriter(OutputWriter):
 
 ## Troubleshooting
 
-### Python 3.13 Installation Error
+### Installation Errors
 
-**Error:** `ERROR: Could not find a version that satisfies the requirement timesfm>=2.5.0`
+**Error:** `ERROR: Could not find a version that satisfies the requirement timesfm`
 
-**Solution:** TimesFM PyPI packages only support Python 3.10-3.11. Use Python 3.11 or install from GitHub:
+**Solution:** Install TimesFM from GitHub source:
 
 ```bash
-# Option 1: Use Python 3.11
-python3.11 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Option 2: Install timesfm from GitHub (for Python 3.13)
 pip install git+https://github.com/google-research/timesfm.git
 ```
-
-### jaxlib Version Conflict
-
-**Error:** `ERROR: Could not find a version that satisfies the requirement jaxlib==0.4.26`
-
-**Solution:** This occurs when using Python versions newer than 3.11. Use Python 3.11 for stable PyPI packages.
 
 ### Memory Issues
 
