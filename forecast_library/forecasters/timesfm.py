@@ -149,7 +149,6 @@ class TimesFMForecaster(Forecaster):
                     if isinstance(level_values, pd.DatetimeIndex):
                         return level_values[-1]
                     else:
-                        pd.to_datetime(level_values[-1])
                         return pd.to_datetime(level_values[-1])
                 except (ValueError, TypeError):
                     continue

@@ -12,11 +12,9 @@ from .transformers.pivot import DataTransformer
 from .data_sources.base import DataSource
 from .data_sources.csv_source import CSVDataSource
 from .data_sources.sqlite_source import SQLiteDataSource
-from .data_sources.bigquery_source import BigQueryDataSource
 
 # Forecasters
 from .forecasters.base import Forecaster
-from .forecasters.timesfm import TimesFMForecaster
 
 # Output writers
 from .outputs.base import OutputWriter
@@ -24,6 +22,7 @@ from .outputs.sqlite_writer import SQLiteOutputWriter
 
 __version__ = "0.1.0"
 
+# Build __all__ dynamically based on available optional dependencies
 __all__ = [
     # Main pipeline
     "ForecastPipeline",
@@ -32,11 +31,23 @@ __all__ = [
     "DataSource",
     "CSVDataSource",
     "SQLiteDataSource",
-    "BigQueryDataSource",
     # Forecasters
     "Forecaster",
-    "TimesFMForecaster",
     # Output writers
     "OutputWriter",
     "SQLiteOutputWriter",
 ]
+
+# Optional: BigQuery support
+try:
+    from .data_sources.bigquery_source import BigQueryDataSource
+    __all__.append("BigQueryDataSource")
+except ImportError:
+    pass
+
+# Optional: TimesFM support
+try:
+    from .forecasters.timesfm import TimesFMForecaster
+    __all__.append("TimesFMForecaster")
+except ImportError:
+    pass
