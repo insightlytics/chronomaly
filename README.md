@@ -35,22 +35,46 @@ pip install git+https://github.com/google-research/timesfm.git
 
 # Install Chronomaly in editable mode
 pip install -e .
+```
 
-# Optional: For BigQuery support
+### Optional Installation Extras
+
+```bash
+# For BigQuery support
 pip install -e ".[bigquery]"
 
-# Optional: For all features (BigQuery + development tools)
+# For TimesFM Flax/JAX backend (alternative to PyTorch)
+pip install -e ".[flax]"
+
+# For TimesFM cross-regression features
+pip install -e ".[xreg]"
+
+# For development tools (pytest, black, flake8)
+pip install -e ".[dev]"
+
+# For all features (BigQuery + dev tools)
 pip install -e ".[all]"
 ```
 
 ### About TimesFM Backend Options
 
-TimesFM supports multiple backend implementations:
-- **torch** (PyTorch): Already included in Chronomaly's dependencies ✅
-- **flax** (Flax/JAX): Alternative backend, not needed for our PyTorch-based implementation
-- **xreg**: Cross-regression functionality, optional feature
+TimesFM supports multiple backend implementations and features:
 
-Chronomaly uses the PyTorch backend by default, so no additional installation is needed.
+- **torch** (PyTorch): ✅ **Default backend** - Already included in Chronomaly's base dependencies
+  - No extra installation needed
+  - Works out of the box
+
+- **flax** (Flax/JAX): Alternative backend for TimesFM
+  - Install with: `pip install -e ".[flax]"`
+  - Includes: flax, optax, einshape, orbax-checkpoint, jaxtyping, jax[cuda]
+  - Use if you prefer JAX/Flax over PyTorch
+
+- **xreg**: Cross-regression features for TimesFM
+  - Install with: `pip install -e ".[xreg]"`
+  - Includes: jax[cuda], scikit-learn
+  - Adds additional regression capabilities
+
+**Note:** Chronomaly uses the PyTorch backend by default. Only install `flax` or `xreg` extras if you specifically need those TimesFM features.
 
 ### Requirements
 
