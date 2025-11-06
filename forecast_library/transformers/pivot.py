@@ -56,9 +56,16 @@ class DataTransformer:
         # Clean string columns (lowercase, remove special characters)
         for column in df.columns:
             if df[column].dtype == 'object' and column not in index_list:
-                df[column] = df[column].str.lower().str.replace(
-                    r'[\(\)\.\-\_\s]', '', regex=True
-                )
+                # Check if column actually contains strings
+                try:
+                    # Only apply string operations if column contains strings
+                    if df[column].apply(lambda x: isinstance(x, str) if x is not None else True).all():
+                        df[column] = df[column].str.lower().str.replace(
+                            r'[\(\)\.\-\_\s]', '', regex=True
+                        )
+                except (AttributeError, TypeError):
+                    # Skip columns that don't support string operations
+                    pass
 
         # Fill NaN values in numeric columns with 0
         numeric_cols = df.select_dtypes(include='number').columns
@@ -84,8 +91,8 @@ class DataTransformer:
         # Fill NaN values with 0
         dataframe_pivot = dataframe_pivot.fillna(0)
 
-        # If single index column is 'date', set daily frequency
-        if len(index_list) == 1 and index_list[0] == 'date':
+        # If single index is DatetimeIndex, set daily frequency
+        if len(index_list) == 1 and isinstance(dataframe_pivot.index, pd.DatetimeIndex):
             dataframe_pivot = dataframe_pivot.asfreq('D', fill_value=0)
 
         return dataframe_pivot

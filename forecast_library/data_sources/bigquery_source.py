@@ -65,7 +65,12 @@ class BigQueryDataSource(DataSource):
         result = query_job.result()
         df = result.to_dataframe()
 
-        if self.date_column and self.date_column in df.columns:
+        if self.date_column:
+            if self.date_column not in df.columns:
+                raise ValueError(
+                    f"date_column '{self.date_column}' not found in query results. "
+                    f"Available columns: {list(df.columns)}"
+                )
             df[self.date_column] = pd.to_datetime(df[self.date_column])
 
         return df

@@ -36,7 +36,12 @@ class CSVDataSource(DataSource):
         """
         df = pd.read_csv(self.file_path, **self.read_csv_kwargs)
 
-        if self.date_column and self.date_column in df.columns:
+        if self.date_column:
+            if self.date_column not in df.columns:
+                raise ValueError(
+                    f"date_column '{self.date_column}' not found in CSV file. "
+                    f"Available columns: {list(df.columns)}"
+                )
             df[self.date_column] = pd.to_datetime(df[self.date_column])
 
         return df
