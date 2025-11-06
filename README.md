@@ -26,19 +26,43 @@ PyPI packages have the following constraints:
 #### Option 1: Use Python 3.11 (Recommended)
 
 ```bash
+# Clone the repository
+git clone https://github.com/insightlytics/chronomaly.git
+cd chronomaly
+
 # Create virtual environment with Python 3.11
 python3.11 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install the package in editable mode with dependencies
+pip install -e .
+
+# For BigQuery support, install with extras
+pip install -e ".[bigquery]"
+
+# For TimesFM support (Python 3.11 only)
+pip install -e ".[timesfm]"
+
+# For all features
+pip install -e ".[all]"
 ```
 
 #### Option 2: Install from GitHub Source (Experimental for Python 3.13)
 
 ```bash
+# Clone the repository
+git clone https://github.com/insightlytics/chronomaly.git
+cd chronomaly
+
+# Create virtual environment with Python 3.13
+python3.13 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install TimesFM from GitHub
 pip install git+https://github.com/google-research/timesfm.git
-pip install -r requirements.txt
+
+# Install the package in editable mode
+pip install -e ".[bigquery]"
 ```
 
 ### Requirements
@@ -433,6 +457,20 @@ class CustomOutputWriter(OutputWriter):
 ```
 
 ## Troubleshooting
+
+### ModuleNotFoundError: No module named 'forecast_library'
+
+**Error:** `ModuleNotFoundError: No module named 'forecast_library'`
+
+**Solution:** The package needs to be installed before use. From the project root directory:
+
+```bash
+# Install in editable mode
+pip install -e .
+
+# Or with all features
+pip install -e ".[all]"
+```
 
 ### Python 3.13 Installation Error
 
