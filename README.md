@@ -15,9 +15,9 @@ A flexible and extensible Python library for time series forecasting using Googl
 
 ### Python Version Compatibility
 
-**TimesFM supports Python 3.11+**
+**Requires Python 3.13+**
 
-The library works with both Python 3.11 and Python 3.13. We install TimesFM directly from GitHub source, which supports all Python 3.11+ versions.
+TimesFM is installed directly from GitHub source for compatibility.
 
 ### Installation Steps
 
@@ -26,11 +26,11 @@ The library works with both Python 3.11 and Python 3.13. We install TimesFM dire
 git clone https://github.com/insightlytics/chronomaly.git
 cd chronomaly
 
-# Create virtual environment (Python 3.11 or 3.13)
-python -m venv venv
+# Create virtual environment
+python3.13 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install TimesFM from GitHub (supports Python 3.11+)
+# Install TimesFM from GitHub
 pip install git+https://github.com/google-research/timesfm.git
 
 # Install Chronomaly in editable mode
@@ -78,7 +78,7 @@ TimesFM supports multiple backend implementations and features:
 
 ### Requirements
 
-- Python >= 3.11
+- Python >= 3.13
 - pandas >= 2.0.0
 - numpy >= 1.24.0
 - torch >= 2.0.0
@@ -91,16 +91,14 @@ TimesFM supports multiple backend implementations and features:
 ### Basic Example (CSV to SQLite)
 
 ```python
-from forecast_library import (
-    ForecastPipeline,
-    CSVDataSource,
-    DataTransformer,
-    TimesFMForecaster,
-    SQLiteOutputWriter
-)
+from chronomaly.application.workflows import ForecastWorkflow
+from chronomaly.infrastructure.data.readers.files import CSVDataReader
+from chronomaly.infrastructure.transformers import DataTransformer
+from chronomaly.infrastructure.forecasters import TimesFMForecaster
+from chronomaly.infrastructure.data.writers.databases import SQLiteDataWriter
 
 # Configure data source
-data_source = CSVDataSource(
+data_reader = CSVDataReader(
     file_path="data/sales.csv",
     date_column="date"
 )
@@ -116,21 +114,21 @@ transformer = DataTransformer(
 forecaster = TimesFMForecaster()
 
 # Configure output
-output_writer = SQLiteOutputWriter(
+data_writer = SQLiteDataWriter(
     database_path="output/forecasts.db",
     table_name="sales_forecast"
 )
 
-# Create and run pipeline
-pipeline = ForecastPipeline(
-    data_source=data_source,
+# Create and run workflow
+workflow = ForecastWorkflow(
+    data_reader=data_reader,
     forecaster=forecaster,
-    output_writer=output_writer,
+    data_writer=data_writer,
     transformer=transformer
 )
 
 # Generate 28-day forecast
-forecast_df = pipeline.run(horizon=28)
+forecast_df = workflow.run(horizon=28)
 ```
 
 ## Architecture
@@ -138,25 +136,26 @@ forecast_df = pipeline.run(horizon=28)
 The library follows a modular architecture with Strategy Pattern:
 
 ```
-ForecastPipeline (Orchestrator)
-├── DataSource (ABC)
-│   ├── CSVDataSource
-│   ├── SQLiteDataSource
-│   └── BigQueryDataSource
+ForecastWorkflow (Orchestrator)
+├── DataReader (ABC)
+│   ├── CSVDataReader
+│   ├── SQLiteDataReader
+│   └── BigQueryDataReader
 ├── DataTransformer
 ├── Forecaster (ABC)
 │   └── TimesFMForecaster
-└── OutputWriter (ABC)
-    └── SQLiteOutputWriter
+└── DataWriter (ABC)
+    ├── SQLiteDataWriter
+    └── BigQueryDataWriter
 ```
 
 ## Components
 
-### Data Sources
+### Data Readers
 
-#### CSVDataSource
+#### CSVDataReader
 ```python
-data_source = CSVDataSource(
+data_reader = CSVDataReader(
     file_path="data/sales.csv",
     date_column="date",
     # Any pandas.read_csv() parameters
@@ -165,18 +164,18 @@ data_source = CSVDataSource(
 )
 ```
 
-#### SQLiteDataSource
+#### SQLiteDataReader
 ```python
-data_source = SQLiteDataSource(
+data_reader = SQLiteDataReader(
     database_path="data/sales.db",
     query="SELECT date, product_id, sales FROM transactions",
     date_column="date"
 )
 ```
 
-#### BigQueryDataSource
+#### BigQueryDataReader
 ```python
-data_source = BigQueryDataSource(
+data_reader = BigQueryDataReader(
     service_account_file="path/to/service_account.json",
     project="your-gcp-project",
     query="SELECT * FROM `project.dataset.table`",
@@ -245,21 +244,34 @@ forecaster = TimesFMForecaster(
 
 ```python
 # Quantile forecast
-forecast_df = pipeline.run(horizon=28, return_point=False)
+forecast_df = workflow.run(horizon=28, return_point=False)
 
 # Point forecast
-forecast_df = pipeline.run(horizon=28, return_point=True)
+forecast_df = workflow.run(horizon=28, return_point=True)
 ```
 
 ### Output Writers
 
-#### SQLiteOutputWriter
+#### SQLiteDataWriter
 
 ```python
-output_writer = SQLiteOutputWriter(
+data_writer = SQLiteDataWriter(
     database_path="output/forecasts.db",
     table_name="sales_forecast",
     if_exists='replace'  # or 'append', 'fail'
+)
+```
+
+#### BigQueryDataWriter
+
+```python
+data_writer = BigQueryDataWriter(
+    service_account_file="path/to/service_account.json",
+    project="your-gcp-project",
+    dataset="your_dataset",
+    table="forecast_results",
+    create_disposition='CREATE_IF_NEEDED',  # or 'CREATE_NEVER'
+    write_disposition='WRITE_TRUNCATE'  # or 'WRITE_APPEND', 'WRITE_EMPTY'
 )
 ```
 
@@ -268,15 +280,13 @@ output_writer = SQLiteOutputWriter(
 ### 1. CSV with Multi-Dimensional Grouping
 
 ```python
-from forecast_library import (
-    ForecastPipeline,
-    CSVDataSource,
-    DataTransformer,
-    TimesFMForecaster,
-    SQLiteOutputWriter
-)
+from chronomaly.application.workflows import ForecastWorkflow
+from chronomaly.infrastructure.data.readers.files import CSVDataReader
+from chronomaly.infrastructure.transformers import DataTransformer
+from chronomaly.infrastructure.forecasters import TimesFMForecaster
+from chronomaly.infrastructure.data.writers.databases import SQLiteDataWriter
 
-data_source = CSVDataSource(
+data_reader = CSVDataReader(
     file_path="data/sales.csv",
     date_column="date"
 )
@@ -290,25 +300,25 @@ transformer = DataTransformer(
 
 forecaster = TimesFMForecaster()
 
-output_writer = SQLiteOutputWriter(
+data_writer = SQLiteDataWriter(
     database_path="output/forecasts.db",
     table_name="multi_dim_forecast"
 )
 
-pipeline = ForecastPipeline(
-    data_source=data_source,
+workflow = ForecastWorkflow(
+    data_reader=data_reader,
     forecaster=forecaster,
-    output_writer=output_writer,
+    data_writer=data_writer,
     transformer=transformer
 )
 
-forecast_df = pipeline.run(horizon=30)
+forecast_df = workflow.run(horizon=30)
 ```
 
 ### 2. SQLite Source
 
 ```python
-data_source = SQLiteDataSource(
+data_reader = SQLiteDataReader(
     database_path="data/transactions.db",
     query="""
         SELECT date, product_id, SUM(amount) as sales
@@ -325,7 +335,7 @@ data_source = SQLiteDataSource(
 ### 3. BigQuery Source
 
 ```python
-data_source = BigQueryDataSource(
+data_reader = BigQueryDataReader(
     service_account_file="credentials/service_account.json",
     project="my-project",
     query="""
@@ -347,47 +357,45 @@ data_source = BigQueryDataSource(
 
 ```python
 # If your data is already in pivot format
-data_source = CSVDataSource(
+data_reader = CSVDataReader(
     file_path="data/sales_pivot.csv",
     date_column="date",
     index_col="date",
     parse_dates=True
 )
 
-pipeline = ForecastPipeline(
-    data_source=data_source,
+workflow = ForecastWorkflow(
+    data_reader=data_reader,
     forecaster=forecaster,
-    output_writer=output_writer,
+    data_writer=data_writer,
     transformer=None  # No transformation needed
 )
 
-forecast_df = pipeline.run(horizon=28)
+forecast_df = workflow.run(horizon=28)
 ```
 
 ### 5. Preview Without Writing
 
 ```python
 # Generate forecast without writing to output
-forecast_df = pipeline.run_without_output(horizon=28)
+forecast_df = workflow.run_without_output(horizon=28)
 
 print(forecast_df.head())
 
 # Later, write manually if satisfied
-output_writer.write(forecast_df)
+data_writer.write(forecast_df)
 ```
 
 ### 6. Multi-Index Usage (Advanced)
 
 ```python
-from forecast_library import (
-    ForecastPipeline,
-    CSVDataSource,
-    DataTransformer,
-    TimesFMForecaster,
-    SQLiteOutputWriter
-)
+from chronomaly.application.workflows import ForecastWorkflow
+from chronomaly.infrastructure.data.readers.files import CSVDataReader
+from chronomaly.infrastructure.transformers import DataTransformer
+from chronomaly.infrastructure.forecasters import TimesFMForecaster
+from chronomaly.infrastructure.data.writers.databases import SQLiteDataWriter
 
-data_source = CSVDataSource(
+data_reader = CSVDataReader(
     file_path="data/hierarchical_sales.csv",
     date_column="date"
 )
@@ -402,20 +410,20 @@ transformer = DataTransformer(
 
 forecaster = TimesFMForecaster()
 
-output_writer = SQLiteOutputWriter(
+data_writer = SQLiteDataWriter(
     database_path="output/forecasts.db",
     table_name="hierarchical_forecast"
 )
 
-pipeline = ForecastPipeline(
-    data_source=data_source,
+workflow = ForecastWorkflow(
+    data_reader=data_reader,
     forecaster=forecaster,
-    output_writer=output_writer,
+    data_writer=data_writer,
     transformer=transformer
 )
 
 # Get forecast with MultiIndex
-forecast_df = pipeline.run_without_output(horizon=28)
+forecast_df = workflow.run_without_output(horizon=28)
 
 # If needed, flatten MultiIndex before using
 # forecast_df = forecast_df.reset_index()
@@ -450,35 +458,61 @@ date       | product_1 | product_2 | ...
 ## Project Structure
 
 ```
-forecast_library/
-├── __init__.py
-├── pipeline.py                 # ForecastPipeline orchestrator
-├── data_sources/
+chronomaly/
+├── __init__.py                                    # Package root (v0.1.0)
+├── application/
 │   ├── __init__.py
-│   ├── base.py                # DataSource ABC
-│   ├── csv_source.py          # CSV implementation
-│   ├── sqlite_source.py       # SQLite implementation
-│   └── bigquery_source.py     # BigQuery implementation
-├── transformers/
+│   └── workflows/
+│       ├── __init__.py                            # Exports: ForecastWorkflow
+│       └── forecast_workflow.py                   # Main orchestrator class
+├── infrastructure/
 │   ├── __init__.py
-│   └── pivot.py               # DataTransformer
-├── forecasters/
-│   ├── __init__.py
-│   ├── base.py                # Forecaster ABC
-│   └── timesfm.py             # TimesFM implementation
-└── outputs/
-    ├── __init__.py
-    ├── base.py                # OutputWriter ABC
-    └── sqlite_writer.py       # SQLite writer
+│   ├── data/
+│   │   ├── __init__.py
+│   │   ├── readers/
+│   │   │   ├── __init__.py                        # Exports: DataReader
+│   │   │   ├── base.py                            # DataReader ABC
+│   │   │   ├── files/
+│   │   │   │   ├── __init__.py                    # Exports: CSVDataReader
+│   │   │   │   └── csv.py                         # CSV implementation
+│   │   │   ├── databases/
+│   │   │   │   ├── __init__.py                    # Exports: BigQueryDataReader, SQLiteDataReader
+│   │   │   │   ├── bigquery.py                    # BigQuery reader
+│   │   │   │   └── sqlite.py                      # SQLite reader
+│   │   │   └── apis/
+│   │   │       └── __init__.py                    # API readers (placeholder)
+│   │   └── writers/
+│   │       ├── __init__.py                        # Exports: DataWriter
+│   │       ├── base.py                            # DataWriter ABC
+│   │       └── databases/
+│   │           ├── __init__.py                    # Exports: BigQueryDataWriter, SQLiteDataWriter
+│   │           ├── bigquery.py                    # BigQuery writer
+│   │           └── sqlite.py                      # SQLite writer
+│   ├── forecasters/
+│   │   ├── __init__.py                            # Exports: Forecaster, TimesFMForecaster
+│   │   ├── base.py                                # Forecaster ABC
+│   │   └── timesfm.py                             # TimesFM implementation
+│   ├── transformers/
+│   │   ├── __init__.py                            # Exports: DataTransformer
+│   │   └── pivot.py                               # Pivot table transformer
+│   ├── comparators/
+│   │   └── __init__.py                            # Comparators (placeholder)
+│   ├── notifiers/
+│   │   └── __init__.py                            # Notifiers (placeholder)
+│   └── visualizers/
+│       └── __init__.py                            # Visualizers (placeholder)
+└── shared/
+    └── __init__.py                                # Shared utilities
 
 examples/
-├── example_csv.py                # CSV example
-├── example_sqlite.py             # SQLite example
-├── example_bigquery.py           # BigQuery example
-├── example_multi_dimension.py    # Multi-column grouping
-├── example_multi_index.py        # Multi-index usage (advanced)
-├── example_point_forecast.py     # Point forecast
-└── example_without_transform.py  # Pre-pivoted data
+├── example_csv.py                                 # CSV example
+├── example_sqlite.py                              # SQLite example
+├── example_bigquery.py                            # BigQuery reader example
+├── example_bigquery_to_bigquery.py                # BigQuery reader to BigQuery writer
+├── example_multi_dimension.py                     # Multi-column grouping
+├── example_multi_index.py                         # Multi-index usage (advanced)
+├── example_point_forecast.py                      # Point forecast
+└── example_without_transform.py                   # Pre-pivoted data
 ```
 
 ## Extending the Library
@@ -486,10 +520,10 @@ examples/
 ### Adding a New Data Source
 
 ```python
-from forecast_library.data_sources.base import DataSource
+from chronomaly.infrastructure.data.readers.base import DataReader
 import pandas as pd
 
-class CustomDataSource(DataSource):
+class CustomDataReader(DataReader):
     def __init__(self, **kwargs):
         # Your initialization
         pass
@@ -503,7 +537,7 @@ class CustomDataSource(DataSource):
 ### Adding a New Forecaster
 
 ```python
-from forecast_library.forecasters.base import Forecaster
+from chronomaly.infrastructure.forecasters.base import Forecaster
 import pandas as pd
 
 class CustomForecaster(Forecaster):
@@ -520,10 +554,10 @@ class CustomForecaster(Forecaster):
 ### Adding a New Output Writer
 
 ```python
-from forecast_library.outputs.base import OutputWriter
+from chronomaly.infrastructure.data.writers.base import DataWriter
 import pandas as pd
 
-class CustomOutputWriter(OutputWriter):
+class CustomDataWriter(DataWriter):
     def __init__(self, **kwargs):
         # Your initialization
         pass
@@ -535,9 +569,9 @@ class CustomOutputWriter(OutputWriter):
 
 ## Troubleshooting
 
-### ModuleNotFoundError: No module named 'forecast_library'
+### ModuleNotFoundError: No module named 'chronomaly'
 
-**Error:** `ModuleNotFoundError: No module named 'forecast_library'`
+**Error:** `ModuleNotFoundError: No module named 'chronomaly'`
 
 **Solution:** The package needs to be installed before use. From the project root directory:
 
@@ -553,13 +587,11 @@ pip install -e ".[all]"
 
 **Error:** `ERROR: Could not find a version that satisfies the requirement timesfm`
 
-**Solution:** Always install TimesFM from GitHub source (supports Python 3.11+):
+**Solution:** Always install TimesFM from GitHub source:
 
 ```bash
 pip install git+https://github.com/google-research/timesfm.git
 ```
-
-This works for both Python 3.11 and Python 3.13.
 
 ### Memory Issues
 
@@ -578,7 +610,8 @@ The architecture supports easy addition of:
 - **Notifications**: `NotificationService` for email/Slack alerts
 - **Actuals Loading**: `ActualsLoader` for loading realized values
 - **Additional Forecasters**: Prophet, ARIMA, custom models
-- **Additional Outputs**: BigQuery, S3, Parquet, etc.
+- **Additional Data Sources**: REST APIs, Snowflake, PostgreSQL, etc.
+- **Additional Outputs**: S3, Parquet, CSV, JSON, etc.
 
 ## License
 

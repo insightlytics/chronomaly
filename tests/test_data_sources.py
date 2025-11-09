@@ -8,11 +8,13 @@ import pandas as pd
 import sqlite3
 import os
 import tempfile
-from forecast_library.data_sources import CSVDataSource, SQLiteDataSource
+from chronomaly.infrastructure.data.readers.files import CSVDataReader
+from chronomaly.infrastructure.data.readers.databases import SQLiteDataReader
+# Old: CSVDataReader, SQLiteDataReader
 
 
-class TestCSVDataSource:
-    """Tests for CSVDataSource"""
+class TestCSVDataReader:
+    """Tests for CSVDataReader"""
 
     def test_csv_with_valid_date_column(self, tmp_path):
         """Test CSV loading with valid date column"""
@@ -25,7 +27,7 @@ class TestCSVDataSource:
         df.to_csv(csv_file, index=False)
 
         # Load with date_column
-        source = CSVDataSource(file_path=str(csv_file), date_column='date')
+        source = CSVDataReader(file_path=str(csv_file), date_column='date')
         result = source.load()
 
         # Verify date column is parsed as datetime
@@ -33,7 +35,7 @@ class TestCSVDataSource:
 
     def test_csv_with_missing_date_column_should_raise_error(self, tmp_path):
         """
-        Bug #5: Test that CSVDataSource raises error when date_column doesn't exist.
+        Bug #5: Test that CSVDataReader raises error when date_column doesn't exist.
         Currently this test will FAIL because the bug exists.
         """
         # Create test CSV with 'timestamp' column, not 'date'
@@ -45,15 +47,15 @@ class TestCSVDataSource:
         df.to_csv(csv_file, index=False)
 
         # Try to load with date_column='date' (which doesn't exist)
-        source = CSVDataSource(file_path=str(csv_file), date_column='date')
+        source = CSVDataReader(file_path=str(csv_file), date_column='date')
 
         # This should raise ValueError but currently doesn't (BUG #5)
         with pytest.raises(ValueError, match="date_column 'date' not found"):
             source.load()
 
 
-class TestSQLiteDataSource:
-    """Tests for SQLiteDataSource"""
+class TestSQLiteDataReader:
+    """Tests for SQLiteDataReader"""
 
     def test_sqlite_with_valid_query(self, tmp_path):
         """Test SQLite loading with valid query"""
@@ -68,7 +70,7 @@ class TestSQLiteDataSource:
         conn.close()
 
         # Load with valid query
-        source = SQLiteDataSource(
+        source = SQLiteDataReader(
             database_path=str(db_file),
             query="SELECT * FROM test_table",
             date_column='date'
@@ -89,7 +91,7 @@ class TestSQLiteDataSource:
         conn.close()
 
         # Try to load with invalid query
-        source = SQLiteDataSource(
+        source = SQLiteDataReader(
             database_path=str(db_file),
             query="SELECT * FROM nonexistent_table"
         )
@@ -103,7 +105,7 @@ class TestSQLiteDataSource:
 
     def test_sqlite_with_missing_date_column_should_raise_error(self, tmp_path):
         """
-        Bug #6: Test that SQLiteDataSource raises error when date_column doesn't exist.
+        Bug #6: Test that SQLiteDataReader raises error when date_column doesn't exist.
         Currently this test will FAIL because the bug exists.
         """
         # Create test database with 'timestamp' column, not 'date'
@@ -117,7 +119,7 @@ class TestSQLiteDataSource:
         conn.close()
 
         # Try to load with date_column='date' (which doesn't exist)
-        source = SQLiteDataSource(
+        source = SQLiteDataReader(
             database_path=str(db_file),
             query="SELECT * FROM test_table",
             date_column='date'

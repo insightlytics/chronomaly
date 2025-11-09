@@ -18,7 +18,7 @@ class TestTimesFMForecaster:
         """
         # Import here to avoid timesfm dependency if not installed
         try:
-            from forecast_library.forecasters import TimesFMForecaster
+            from chronomaly.infrastructure.forecasters import TimesFMForecaster
         except ImportError:
             pytest.skip("timesfm not installed")
 
@@ -41,7 +41,7 @@ class TestTimesFMForecaster:
     def test_get_last_date_with_datetime_index(self):
         """Test _get_last_date with regular DatetimeIndex"""
         try:
-            from forecast_library.forecasters import TimesFMForecaster
+            from chronomaly.infrastructure.forecasters import TimesFMForecaster
         except ImportError:
             pytest.skip("timesfm not installed")
 
@@ -60,7 +60,7 @@ class TestTimesFMForecaster:
     def test_get_last_date_with_invalid_index_raises_error(self):
         """Test that _get_last_date raises proper error for non-datetime index"""
         try:
-            from forecast_library.forecasters import TimesFMForecaster
+            from chronomaly.infrastructure.forecasters import TimesFMForecaster
         except ImportError:
             pytest.skip("timesfm not installed")
 

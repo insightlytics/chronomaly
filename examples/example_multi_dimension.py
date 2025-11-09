@@ -2,18 +2,16 @@
 Example: Multi-dimensional forecasting (multiple grouping columns)
 """
 
-from forecast_library import (
-    ForecastPipeline,
-    CSVDataSource,
-    DataTransformer,
-    TimesFMForecaster,
-    SQLiteOutputWriter
-)
-
+from chronomaly.application.workflows import ForecastWorkflow
+from chronomaly.infrastructure.data.readers.databases import BigQueryDataReader, SQLiteDataReader
+from chronomaly.infrastructure.data.readers.files import CSVDataReader
+from chronomaly.infrastructure.transformers import DataTransformer
+from chronomaly.infrastructure.forecasters import TimesFMForecaster
+from chronomaly.infrastructure.data.writers.databases import BigQueryDataWriter, SQLiteDataWriter
 
 def main():
     # Step 1: Configure data source
-    data_source = CSVDataSource(
+    data_reader = CSVDataReader(
         file_path="data/sales_multi.csv",
         date_column="date"
     )
@@ -30,22 +28,22 @@ def main():
     forecaster = TimesFMForecaster()
 
     # Step 4: Configure output writer
-    output_writer = SQLiteOutputWriter(
+    data_writer = SQLiteDataWriter(
         database_path="output/forecasts.db",
         table_name="multi_dimension_forecast",
         if_exists="replace"
     )
 
     # Step 5: Create and run pipeline
-    pipeline = ForecastPipeline(
-        data_source=data_source,
+    workflow = ForecastWorkflow(
+        data_reader=data_reader,
         forecaster=forecaster,
-        output_writer=output_writer,
+        data_writer=data_writer,
         transformer=transformer
     )
 
     # Generate forecast
-    forecast_df = pipeline.run(horizon=28)
+    forecast_df = workflow.run(horizon=28)
 
     print("Multi-dimensional forecast completed!")
     print(forecast_df.head())

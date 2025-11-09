@@ -69,7 +69,7 @@ Repository = "https://github.com/insightlytics/chronomaly"
 Issues = "https://github.com/insightlytics/chronomaly/issues"
 
 [tool.setuptools]
-packages = ["forecast_library", "forecast_library.data_sources", "forecast_library.transformers", "forecast_library.forecasters", "forecast_library.outputs"]
+packages = { find = {} }
 
 [tool.setuptools.package-data]
-forecast_library = ["py.typed"]
+chronomaly = ["py.typed"]

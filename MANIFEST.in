@@ -1,6 +1,0 @@
-include README.md
-include LICENSE
-include requirements.txt
-include pyproject.toml
-recursive-include forecast_library *.py
-recursive-include examples *.py

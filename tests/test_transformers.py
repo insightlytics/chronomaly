@@ -6,7 +6,7 @@ Tests for bugs #3, #4.
 import pytest
 import pandas as pd
 import numpy as np
-from forecast_library.transformers import DataTransformer
+from chronomaly.infrastructure.transformers import DataTransformer
 
 
 class TestDataTransformer:
