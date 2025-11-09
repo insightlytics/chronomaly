@@ -1,77 +1,92 @@
 # Anomaly Detection Workflow
 
-This guide explains how to use the `AnomalyDetectionWorkflow` to detect anomalies by comparing forecast predictions against actual values.
+Complete guide to using the `AnomalyDetectionWorkflow` for comparing forecast predictions against actual values.
 
 ## Overview
 
-The Anomaly Detection Workflow compares forecast data (with confidence intervals) against actual observed data to identify anomalies. It's particularly useful for:
+The Anomaly Detection Workflow compares forecast data (with confidence intervals) against actual observed data to identify anomalies. It matches the functionality of the original implementation and includes advanced filtering and transformation options.
 
-- Detecting when actual metrics fall outside expected ranges
-- Monitoring forecast accuracy
-- Identifying unusual patterns in time series data
-- Alerting on significant deviations
+**Key Features:**
+- Automatic pivoting of raw actual data
+- 80% confidence interval comparison (q10-q90)
+- Dimension name mapping and metric splitting
+- Cumulative threshold filtering (e.g., top 95% of metrics)
+- Flexible anomaly filtering
+- Deviation percentage calculation and formatting
 
 ## How It Works
 
 ### 1. Data Format Requirements
 
 **Forecast Data (Pivot Format)**
-- Must be in wide/pivot format with one column per metric
-- Each cell contains pipe-separated quantiles: `point|q10|q20|q30|q40|q50|q60|q70|q80|q90`
-- The workflow uses q10 (index 1) and q90 (index 9) for the 80% confidence interval
+- Wide/pivot format with one column per metric
+- Pipe-separated quantiles: `point|q10|q20|q30|q40|q50|q60|q70|q80|q90`
+- q10 at index 1, q90 at index 9 (80% confidence interval)
 
 Example:
 ```
-date        | desktop_organic | mobile_paid
-2024-01-15  | 100|90|95|98|100|102|105|108|110|115 | 50|45|47|48|50|52|53|55|57|60
+date        | desktop_organic_homepage | mobile_paid_product
+2024-01-15  | 100|90|92|95|98|100|102|105|108|110 | 50|45|46|47|48|50|52|53|55|60
 ```
 
 **Actual Data (Raw Format)**
-- Can be in long/raw format
-- Will be automatically pivoted to match forecast format
-- Should contain the same dimensions as forecast
+- Long format (will be automatically pivoted)
+- Contains dimension columns (platform, channel, etc.)
 
 Example:
 ```
-date        | platform | channel  | sessions
-2024-01-15  | desktop  | organic  | 95
-2024-01-15  | mobile   | paid     | 65
+date        | platform | channel  | landing_page | sessions
+2024-01-15  | desktop  | organic  | homepage     | 95
+2024-01-15  | mobile   | paid     | product      | 65
 ```
 
 ### 2. Anomaly Detection Logic
 
-For each metric, the workflow:
+For each metric:
 
-1. **Extracts confidence interval**: Gets q10 and q90 from forecast (80% confidence)
-2. **Compares actual value**:
-   - `IN_RANGE`: actual is between q10 and q90
-   - `BELOW_P10`: actual is below q10 (lower than expected)
-   - `ABOVE_P90`: actual is above q90 (higher than expected)
-   - `NO_FORECAST`: no valid forecast available (q10=0 and q90=0)
+1. **Extract confidence interval**: q10 and q90 from forecast (80% CI)
+2. **Compare actual value**:
+   - `IN_RANGE`: q10 ≤ actual ≤ q90
+   - `BELOW_P10`: actual < q10 (lower than expected)
+   - `ABOVE_P90`: actual > q90 (higher than expected)
+   - `NO_FORECAST`: no valid forecast (q10=0 and q90=0)
 
-3. **Calculates deviation**:
-   - If below q10: `deviation_pct = ((q10 - actual) / q10) * 100`
-   - If above q90: `deviation_pct = ((actual - q90) / q90) * 100`
-   - If in range: `deviation_pct = 0`
+3. **Calculate deviation**:
+   - Below q10: `((q10 - actual) / q10) * 100`
+   - Above q90: `((actual - q90) / q90) * 100`
 
-### 3. Output Format
+### 3. Advanced Features
 
-The workflow produces unpivoted results with columns:
+**Dimension Mapping**
+- Preserves original dimension names (e.g., "Mobile App" instead of "mobileapp")
+- Creates mapping from actual data column values
+- Applies during metric splitting
 
-| Column | Description |
-|--------|-------------|
-| date | Observation date (if available) |
-| metric | Metric name (e.g., "desktop_organic") |
-| actual | Actual observed value |
-| forecast | Point forecast (q50) |
-| q10 | Lower bound of 80% CI |
-| q90 | Upper bound of 80% CI |
-| status | IN_RANGE, BELOW_P10, ABOVE_P90, or NO_FORECAST |
-| deviation_pct | Percentage deviation from boundary |
+**Metric Splitting**
+- Converts `desktop_organic_homepage` to separate columns:
+  - `platform`: "Desktop"
+  - `channel`: "Organic"
+  - `landing_page`: "Homepage"
+
+**Cumulative Threshold Filtering**
+- Filters to top X% of metrics by forecast value
+- Example: `cumulative_threshold=0.95` keeps top 95%
+- Focuses analysis on high-impact metrics
+
+**Anomaly Filtering**
+- `return_only_anomalies=True`: Only BELOW_P10, ABOVE_P90
+- `min_deviation_threshold=5.0`: Minimum 5% deviation
+- Combines for significant anomalies only
+
+**String Formatting**
+- `format_deviation_as_string=True`: "15.3%" instead of 15.3
+- Useful for reports and dashboards
 
 ## Usage Examples
 
-### Example 1: SQLite to SQLite
+### Example 1: Basic Detection
+
+Simple detection without advanced features:
 
 ```python
 from chronomaly.application.workflows import AnomalyDetectionWorkflow
@@ -80,82 +95,21 @@ from chronomaly.infrastructure.transformers import DataTransformer
 from chronomaly.infrastructure.comparators import ForecastActualComparator
 from chronomaly.infrastructure.data.writers.databases import SQLiteDataWriter
 
-# Read forecast data (already pivoted)
+# Configure readers
 forecast_reader = SQLiteDataReader(
-    database_path="data/forecasts.db",
+    database_path="forecasts.db",
     query="SELECT * FROM forecast WHERE date = '2024-01-15'",
     date_column="date"
 )
 
-# Read actual data (raw format)
 actual_reader = SQLiteDataReader(
-    database_path="data/actuals.db",
+    database_path="actuals.db",
     query="""
         SELECT date, platform, channel, SUM(sessions) as sessions
-        FROM traffic
-        WHERE date = '2024-01-15'
+        FROM traffic WHERE date = '2024-01-15'
         GROUP BY date, platform, channel
     """,
     date_column="date"
-)
-
-# Configure transformer to pivot actual data
-transformer = DataTransformer(
-    index="date",
-    columns=["platform", "channel"],
-    values="sessions"
-)
-
-# Configure anomaly detector
-anomaly_detector = ForecastActualComparator(
-    transformer=transformer,
-    date_column="date"
-)
-
-# Configure output writer
-data_writer = SQLiteDataWriter(
-    database_path="output/anomalies.db",
-    table_name="detected_anomalies",
-    if_exists="append"
-)
-
-# Run workflow
-workflow = AnomalyDetectionWorkflow(
-    forecast_reader=forecast_reader,
-    actual_reader=actual_reader,
-    anomaly_detector=anomaly_detector,
-    data_writer=data_writer
-)
-
-results = workflow.run()
-```
-
-### Example 2: BigQuery to BigQuery
-
-```python
-from chronomaly.application.workflows import AnomalyDetectionWorkflow
-from chronomaly.infrastructure.data.readers.databases import BigQueryDataReader
-from chronomaly.infrastructure.transformers import DataTransformer
-from chronomaly.infrastructure.comparators import ForecastActualComparator
-from chronomaly.infrastructure.data.writers.databases import BigQueryDataWriter
-
-# Read forecast from BigQuery
-forecast_reader = BigQueryDataReader(
-    service_account_file="credentials.json",
-    project="my-project",
-    query="SELECT * FROM `my-project.forecasts.daily` WHERE date = CURRENT_DATE() - 1"
-)
-
-# Read actual from BigQuery
-actual_reader = BigQueryDataReader(
-    service_account_file="credentials.json",
-    project="my-project",
-    query="""
-        SELECT date, platform, channel, SUM(sessions) as sessions
-        FROM `my-project.analytics.traffic`
-        WHERE date = CURRENT_DATE() - 1
-        GROUP BY date, platform, channel
-    """
 )
 
 # Configure transformer
@@ -165,19 +119,16 @@ transformer = DataTransformer(
     values="sessions"
 )
 
-# Configure detector
+# Basic detector
 detector = ForecastActualComparator(
     transformer=transformer,
     date_column="date"
 )
 
-# Write to BigQuery
-writer = BigQueryDataWriter(
-    service_account_file="credentials.json",
-    project="my-project",
-    dataset="anomalies",
-    table="daily_detections",
-    if_exists="append"
+# Configure writer
+writer = SQLiteDataWriter(
+    database_path="output.db",
+    table_name="anomalies"
 )
 
 # Run workflow
@@ -191,86 +142,287 @@ workflow = AnomalyDetectionWorkflow(
 results = workflow.run()
 ```
 
-### Example 3: Filtered Detection (Without Writing)
+### Example 2: Full-Featured Detection (Matching Original Implementation)
+
+Complete example with all features:
 
 ```python
-# Same setup as above, then:
+from chronomaly.application.workflows import AnomalyDetectionWorkflow
+from chronomaly.infrastructure.data.readers.databases import BigQueryDataReader
+from chronomaly.infrastructure.transformers import DataTransformer
+from chronomaly.infrastructure.comparators import ForecastActualComparator
+from chronomaly.infrastructure.data.writers.databases import BigQueryDataWriter
 
-# Run without writing to output
-results = workflow.run_without_output()
+# Read forecast data
+forecast_reader = BigQueryDataReader(
+    service_account_file="credentials.json",
+    project="my-project",
+    query="""
+        SELECT * FROM `my-project.dataset.forecast`
+        WHERE date = '2024-01-15'
+    """
+)
 
-# Filter significant anomalies
-significant = results[
-    (results['status'].isin(['BELOW_P10', 'ABOVE_P90'])) &
-    (results['deviation_pct'] > 10.0)  # More than 10% deviation
-]
+# Read actual data
+actual_reader = BigQueryDataReader(
+    service_account_file="credentials.json",
+    project="my-project",
+    query="""
+        SELECT
+            date,
+            platform,
+            default_channel_group,
+            landing_page_group,
+            SUM(sessions) AS sessions
+        FROM `my-project.dataset.traffic`
+        WHERE date = '2024-01-15'
+        GROUP BY date, platform, default_channel_group, landing_page_group
+    """
+)
 
-print(f"Found {len(significant)} significant anomalies")
-print(significant)
+# Load actual data to create dimension mappings
+actual_df = actual_reader.load()
+
+platform_map = ForecastActualComparator.create_mapping_from_dataframe(
+    actual_df, 'platform'
+)
+channel_map = ForecastActualComparator.create_mapping_from_dataframe(
+    actual_df, 'default_channel_group'
+)
+landing_page_map = ForecastActualComparator.create_mapping_from_dataframe(
+    actual_df, 'landing_page_group'
+)
+
+# Configure transformer
+transformer = DataTransformer(
+    index="date",
+    columns=["platform", "default_channel_group", "landing_page_group"],
+    values="sessions"
+)
+
+# Full-featured detector
+detector = ForecastActualComparator(
+    transformer=transformer,
+    date_column="date",
+    exclude_columns=["date"],
+    # Split metrics into dimension columns
+    dimension_names=["platform", "default_channel_group", "landing_page_group"],
+    # Apply dimension mappings
+    dimension_mappings={
+        "platform": platform_map,
+        "default_channel_group": channel_map,
+        "landing_page_group": landing_page_map
+    },
+    # Filter to top 95% of metrics
+    cumulative_threshold=0.95,
+    # Return only anomalies
+    return_only_anomalies=True,
+    # Minimum 5% deviation
+    min_deviation_threshold=5.0,
+    # Format as "15.3%"
+    format_deviation_as_string=True
+)
+
+# Configure writer
+writer = BigQueryDataWriter(
+    service_account_file="credentials.json",
+    project="my-project",
+    dataset="anomalies",
+    table="daily_anomalies",
+    if_exists="append"
+)
+
+# Run workflow
+workflow = AnomalyDetectionWorkflow(
+    forecast_reader=forecast_reader,
+    actual_reader=actual_reader,
+    anomaly_detector=detector,
+    data_writer=writer
+)
+
+results = workflow.run()
+
+print(f"Detected {len(results)} anomalies")
 ```
 
-### Example 4: Using detect_with_filter
+### Example 3: Manual Detection Without Workflow
+
+More control by loading data manually:
 
 ```python
-# Load data manually
+# Load data
 forecast_df = forecast_reader.load()
 actual_df = actual_reader.load()
 
-# Use built-in filter method
-filtered_results = detector.detect_with_filter(
-    forecast_df=forecast_df,
-    actual_df=actual_df,
-    min_deviation_pct=5.0,  # Only deviations > 5%
-    exclude_no_forecast=True  # Skip metrics without forecast
+# Create mappings
+platform_map = ForecastActualComparator.create_mapping_from_dataframe(
+    actual_df, 'platform'
 )
+
+# Configure detector
+transformer = DataTransformer(
+    index="date",
+    columns=["platform", "channel"],
+    values="sessions"
+)
+
+detector = ForecastActualComparator(
+    transformer=transformer,
+    date_column="date",
+    dimension_names=["platform", "channel"],
+    dimension_mappings={"platform": platform_map},
+    cumulative_threshold=0.95,
+    return_only_anomalies=True,
+    min_deviation_threshold=5.0
+)
+
+# Detect anomalies
+results = detector.detect(forecast_df, actual_df)
+
+# Custom processing
+if not results.empty:
+    # Filter for critical anomalies (>10% deviation)
+    critical = results[results['deviation_pct'] > 10.0]
+    print(f"Critical anomalies: {len(critical)}")
+```
+
+### Example 4: Progressive Filtering
+
+Different filtering strategies:
+
+```python
+transformer = DataTransformer(
+    index="date",
+    columns=["platform", "channel"],
+    values="sessions"
+)
+
+# Strategy 1: All results
+detector1 = ForecastActualComparator(
+    transformer=transformer,
+    date_column="date"
+)
+all_results = detector1.detect(forecast_df, actual_df)
+
+# Strategy 2: Top 95% by forecast
+detector2 = ForecastActualComparator(
+    transformer=transformer,
+    date_column="date",
+    cumulative_threshold=0.95
+)
+top95 = detector2.detect(forecast_df, actual_df)
+
+# Strategy 3: Only anomalies
+detector3 = ForecastActualComparator(
+    transformer=transformer,
+    date_column="date",
+    return_only_anomalies=True
+)
+anomalies = detector3.detect(forecast_df, actual_df)
+
+# Strategy 4: Significant anomalies (>5% deviation)
+detector4 = ForecastActualComparator(
+    transformer=transformer,
+    date_column="date",
+    return_only_anomalies=True,
+    min_deviation_threshold=5.0
+)
+significant = detector4.detect(forecast_df, actual_df)
+
+print(f"All: {len(all_results)}")
+print(f"Top 95%: {len(top95)}")
+print(f"Anomalies: {len(anomalies)}")
+print(f"Significant: {len(significant)}")
 ```
 
 ## Configuration Options
 
 ### ForecastActualComparator Parameters
 
-- `transformer` (required): DataTransformer to pivot actual data
-- `date_column` (optional): Name of date column (default: 'date')
-- `exclude_columns` (optional): List of columns to exclude from comparison
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `transformer` | DataTransformer | **required** | Transforms actual data to pivot format |
+| `date_column` | str | `'date'` | Name of date column |
+| `exclude_columns` | List[str] | `[date_column]` | Columns to exclude from comparison |
+| `dimension_names` | List[str] | `None` | Dimension names to extract from metric |
+| `dimension_mappings` | Dict | `{}` | Mappings for dimension values |
+| `cumulative_threshold` | float | `None` | Filter to top X% (e.g., 0.95) |
+| `return_only_anomalies` | bool | `False` | Return only BELOW_P10, ABOVE_P90 |
+| `min_deviation_threshold` | float | `0.0` | Minimum deviation % to include |
+| `format_deviation_as_string` | bool | `False` | Format as "15.3%" vs 15.3 |
 
 ### DataTransformer Parameters
 
-- `index`: Column(s) to use as index (typically 'date')
-- `columns`: Column(s) to use as pivot columns (creates metric names)
-- `values`: Column to use as values (typically a numeric metric)
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `index` | str/List[str] | Column(s) for index (typically 'date') |
+| `columns` | str/List[str] | Column(s) for pivot columns |
+| `values` | str | Column for values (metric to aggregate) |
+
+## Output Formats
+
+### Basic Output (No Dimension Splitting)
+
+```
+date       | metric                  | actual | forecast | q10 | q90 | status    | deviation_pct
+2024-01-15 | desktop_organic_homepage| 950    | 1000     | 900 | 1100| IN_RANGE  | 0.0
+2024-01-15 | mobile_paid_product     | 950    | 800      | 720 | 900 | ABOVE_P90 | 5.6
+```
+
+### With Dimension Splitting
+
+```
+date       | platform | channel | landing_page | actual | forecast | q10 | q90 | status    | deviation_pct
+2024-01-15 | Desktop  | Organic | Homepage     | 950    | 1000     | 900 | 1100| IN_RANGE  | 0.0
+2024-01-15 | Mobile   | Paid    | Product      | 950    | 800      | 720 | 900 | ABOVE_P90 | 5.6%
+```
 
 ## Best Practices
 
-1. **Confidence Intervals**: The workflow uses q10 and q90 (80% confidence). This means ~20% of normal observations will be flagged as anomalies. Adjust your filtering accordingly.
-
-2. **Deviation Thresholds**: Use `detect_with_filter()` with a reasonable `min_deviation_pct` (e.g., 5-10%) to focus on significant anomalies.
-
-3. **Multiple Dimensions**: When pivoting with multiple columns (e.g., platform, channel, landing_page), the transformer automatically creates combined metric names like `platform_channel_landingpage`.
-
-4. **Historical Tracking**: Use `if_exists="append"` in writers to build a historical anomaly database for trend analysis.
-
-5. **Data Validation**: Always check that forecast and actual data cover the same date range and metrics before comparison.
+1. **Create Dimension Mappings**: Always create mappings from actual data to preserve original names
+2. **Use Cumulative Threshold**: Focus on high-impact metrics with `cumulative_threshold=0.95`
+3. **Filter Intelligently**: Combine `return_only_anomalies=True` and `min_deviation_threshold=5.0`
+4. **Historical Tracking**: Use `if_exists="append"` in writers for trend analysis
+5. **Test Incrementally**: Start with basic detection, then add features as needed
 
 ## Troubleshooting
 
 **Problem**: "Forecast DataFrame is empty"
-- Check that your forecast query returns data
-- Verify the date filter matches your actual data
+- **Solution**: Check query returns data for the specified date
 
 **Problem**: "Required columns not found in DataFrame"
-- Ensure actual data contains all columns specified in transformer
-- Check column names match exactly (case-sensitive)
+- **Solution**: Verify actual data contains columns specified in transformer
 
 **Problem**: "All results show NO_FORECAST"
-- Verify forecast data is in correct pipe-separated format
-- Check that forecast values are not all zeros
+- **Solution**: Verify forecast format is pipe-separated with 10 values
 
-**Problem**: "Metrics don't match between forecast and actual"
-- Ensure the pivot columns in transformer match the forecast column naming
-- Check for case sensitivity and special characters in column names
+**Problem**: "Metrics don't match"
+- **Solution**: Check pivot column names match forecast column names exactly
 
-## See Also
+**Problem**: "Dimension mapping not applied"
+- **Solution**: Ensure `dimension_names` matches order of `columns` in transformer
 
-- Full SQLite example: `examples/example_anomaly_detection_sqlite.py`
-- Full BigQuery example: `examples/example_anomaly_detection_bigquery.py`
-- ForecastWorkflow documentation for generating forecasts
+## Complete Examples
+
+See these files for complete working examples:
+
+- `example_anomaly_detection_sqlite.py` - Basic SQLite example
+- `example_anomaly_detection_bigquery.py` - BigQuery example
+- `example_anomaly_detection_full_featured.py` - All features (matches original)
+- `test_anomaly_detection_full.py` - Comprehensive test suite
+
+## Comparison with Original Implementation
+
+This implementation provides the same functionality as the original script:
+
+| Original Feature | Implementation |
+|-----------------|----------------|
+| `create_mapping()` | `ForecastActualComparator.create_mapping_from_dataframe()` |
+| `filter_cumulative_threshold()` | `cumulative_threshold` parameter |
+| Metric splitting | `dimension_names` parameter |
+| Dimension mapping | `dimension_mappings` parameter |
+| Anomaly filtering | `return_only_anomalies` parameter |
+| Deviation threshold | `min_deviation_threshold` parameter |
+| String formatting | `format_deviation_as_string` parameter |
+
+**Key Difference**: Original processes company loop; this version assumes single company data (as per requirement).

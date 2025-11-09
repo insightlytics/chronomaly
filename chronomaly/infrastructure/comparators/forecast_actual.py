@@ -4,7 +4,7 @@ Forecast vs Actual anomaly detection implementation.
 
 import pandas as pd
 import numpy as np
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict
 from .base import AnomalyDetector
 from ..transformers.pivot import DataTransformer
 
@@ -18,7 +18,10 @@ class ForecastActualComparator(AnomalyDetector):
     2. Extracts q10 and q90 from pipe-separated forecast values (80% confidence interval)
     3. Compares actual values against the confidence interval
     4. Calculates deviation percentages
-    5. Unpivots results for analysis
+    5. Splits metric names into dimension columns (optional)
+    6. Applies dimension name mappings (optional)
+    7. Filters by cumulative threshold (optional)
+    8. Returns only anomalies (optional)
 
     The forecast data is expected to be in pivot format with pipe-separated quantiles:
     "point|q10|q20|q30|q40|q50|q60|q70|q80|q90"
@@ -28,17 +31,66 @@ class ForecastActualComparator(AnomalyDetector):
         transformer: DataTransformer instance to pivot actual data
         date_column: Name of the date column (default: 'date')
         exclude_columns: List of columns to exclude from comparison (e.g., ['date', 'company'])
+        dimension_names: List of dimension names to extract from metric (e.g., ['platform', 'channel', 'landing_page'])
+        dimension_mappings: Dict mapping dimension names to their value mappings (optional)
+        cumulative_threshold: Filter to top X% of metrics by forecast value (e.g., 0.95 for top 95%)
+        return_only_anomalies: If True, return only BELOW_P10 and ABOVE_P90 statuses (default: False)
+        min_deviation_threshold: Minimum deviation threshold to include (e.g., 0.05 for 5%)
+        format_deviation_as_string: If True, format deviation_pct as "15.3%" instead of 15.3
     """
 
     def __init__(
         self,
         transformer: DataTransformer,
         date_column: str = 'date',
-        exclude_columns: Optional[List[str]] = None
+        exclude_columns: Optional[List[str]] = None,
+        dimension_names: Optional[List[str]] = None,
+        dimension_mappings: Optional[Dict[str, Dict[str, str]]] = None,
+        cumulative_threshold: Optional[float] = None,
+        return_only_anomalies: bool = False,
+        min_deviation_threshold: float = 0.0,
+        format_deviation_as_string: bool = False
     ):
         self.transformer = transformer
         self.date_column = date_column
         self.exclude_columns = exclude_columns or [date_column]
+        self.dimension_names = dimension_names
+        self.dimension_mappings = dimension_mappings or {}
+        self.cumulative_threshold = cumulative_threshold
+        self.return_only_anomalies = return_only_anomalies
+        self.min_deviation_threshold = min_deviation_threshold
+        self.format_deviation_as_string = format_deviation_as_string
+
+    @staticmethod
+    def create_mapping_from_dataframe(df: pd.DataFrame, column_name: str) -> Dict[str, str]:
+        """
+        Create a mapping dictionary from a DataFrame column.
+
+        Maps normalized keys (lowercase, no spaces/special chars) to original values.
+
+        Args:
+            df: DataFrame containing the column
+            column_name: Name of the column to create mapping from
+
+        Returns:
+            Dict[str, str]: Mapping from normalized keys to original values
+
+        Example:
+            Input column: ['Mobile App', 'Desktop Web', 'Mobile-Web']
+            Output: {'mobileapp': 'Mobile App', 'desktopweb': 'Desktop Web', 'mobileweb': 'Mobile-Web'}
+        """
+        value_map = {}
+
+        if column_name not in df.columns:
+            return value_map
+
+        for value in df[column_name].dropna().unique():
+            value_str = str(value)
+            # Normalize: lowercase, remove spaces, hyphens, parentheses
+            key = value_str.lower().replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('.', '').replace('_', '')
+            value_map[key] = value_str
+
+        return value_map
 
     def detect(
         self,
@@ -53,9 +105,10 @@ class ForecastActualComparator(AnomalyDetector):
             actual_df: Actual data in raw format (will be pivoted)
 
         Returns:
-            pd.DataFrame: Unpivoted anomaly results with columns:
-                - date: The date of the observation
-                - metric: The metric name (column name from pivot)
+            pd.DataFrame: Anomaly detection results with columns:
+                - date: The date of the observation (if available)
+                - metric: The metric name (if dimension_names not specified)
+                - [dimension columns]: Separate columns for each dimension (if dimension_names specified)
                 - actual: Actual value
                 - forecast: Point forecast (q50)
                 - q10: Lower bound of 80% confidence interval
@@ -132,10 +185,36 @@ class ForecastActualComparator(AnomalyDetector):
                 results.append(result)
 
         # Step 4: Create result dataframe
+        if not results:
+            return pd.DataFrame()
+
         result_df = pd.DataFrame(results)
 
-        # Step 5: Filter only anomalies (optional - keep all for transparency)
-        # User can filter afterwards if needed
+        # Step 5: Split metric names into dimension columns (if specified)
+        if self.dimension_names:
+            result_df = self._split_metric_to_dimensions(result_df)
+
+        # Step 6: Apply cumulative threshold filter (if specified)
+        if self.cumulative_threshold is not None:
+            result_df = self._filter_cumulative_threshold(
+                result_df,
+                'forecast',
+                self.cumulative_threshold
+            )
+
+        # Step 7: Filter only anomalies (if specified)
+        if self.return_only_anomalies or self.min_deviation_threshold > 0:
+            result_df = self._filter_anomalies(result_df)
+
+        # Step 8: Format deviation as string (if specified)
+        if self.format_deviation_as_string and not result_df.empty:
+            result_df['deviation_pct'] = (
+                (result_df['deviation_pct'].round(1).astype(str) + '%')
+            )
+
+        # Step 9: Remove metric column if dimensions were extracted
+        if self.dimension_names and 'metric' in result_df.columns:
+            result_df = result_df.drop(columns=['metric'])
 
         return result_df
 
@@ -231,10 +310,10 @@ class ForecastActualComparator(AnomalyDetector):
 
         result = {
             'metric': column,
-            'actual': round(actual, 2),
-            'forecast': round(point_forecast, 2),
-            'q10': round(q10, 2),
-            'q90': round(q90, 2),
+            'actual': round(actual),
+            'forecast': round(point_forecast),
+            'q10': round(q10),
+            'q90': round(q90),
             'status': status,
             'deviation_pct': round(deviation_pct, 2)
         }
@@ -245,6 +324,111 @@ class ForecastActualComparator(AnomalyDetector):
 
         return result
 
+    def _split_metric_to_dimensions(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Split metric column into separate dimension columns.
+
+        Args:
+            df: DataFrame with 'metric' column
+
+        Returns:
+            pd.DataFrame: DataFrame with separate dimension columns
+        """
+        if 'metric' not in df.columns or not self.dimension_names:
+            return df
+
+        df = df.copy()
+
+        # Split metric by underscore
+        metric_parts = df['metric'].str.split('_', expand=True)
+
+        # Assign to dimension columns
+        for i, dim_name in enumerate(self.dimension_names):
+            if i < metric_parts.shape[1]:
+                df[dim_name] = metric_parts[i]
+
+                # Apply mapping if available
+                if dim_name in self.dimension_mappings:
+                    # Normalize for mapping lookup
+                    df[dim_name] = df[dim_name].apply(
+                        lambda x: self.dimension_mappings[dim_name].get(str(x).lower(), str(x)) if pd.notna(x) else x
+                    )
+            else:
+                df[dim_name] = None
+
+        return df
+
+    def _filter_cumulative_threshold(
+        self,
+        df: pd.DataFrame,
+        value_column: str,
+        threshold_pct: float = 0.95
+    ) -> pd.DataFrame:
+        """
+        Filter DataFrame to keep only top X% of rows by cumulative sum.
+
+        Args:
+            df: Input DataFrame
+            value_column: Column to use for cumulative calculation
+            threshold_pct: Cumulative percentage threshold (e.g., 0.95 for 95%)
+
+        Returns:
+            pd.DataFrame: Filtered DataFrame
+        """
+        if df.empty:
+            return df.copy()
+
+        total_value = df[value_column].sum()
+
+        if total_value == 0:
+            return df.copy()
+
+        # Sort by value descending
+        sorted_df = df.sort_values(value_column, ascending=False).copy()
+        sorted_df['_cumulative'] = sorted_df[value_column].cumsum()
+        sorted_df['_cumulative_pct'] = sorted_df['_cumulative'] / total_value
+
+        # Find threshold index
+        threshold_rows = sorted_df[sorted_df['_cumulative_pct'] >= threshold_pct]
+
+        if len(threshold_rows) > 0:
+            threshold_idx = threshold_rows.index[0]
+            rows_to_keep = sorted_df.loc[:threshold_idx]
+            min_threshold = rows_to_keep[value_column].min()
+        else:
+            min_threshold = sorted_df[value_column].min()
+
+        # Filter original DataFrame
+        filtered_df = df[df[value_column] >= min_threshold].copy()
+
+        return filtered_df
+
+    def _filter_anomalies(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Filter DataFrame to keep only anomalies.
+
+        Args:
+            df: Input DataFrame
+
+        Returns:
+            pd.DataFrame: Filtered DataFrame with only anomalies
+        """
+        if df.empty:
+            return df
+
+        # Filter by status
+        if self.return_only_anomalies:
+            df = df[df['status'].isin(['BELOW_P10', 'ABOVE_P90'])]
+
+        # Filter by deviation threshold
+        if self.min_deviation_threshold > 0:
+            df = df[
+                (df['status'] == 'IN_RANGE') |
+                (df['deviation_pct'] >= self.min_deviation_threshold)
+            ]
+
+        return df
+
     def detect_with_filter(
         self,
         forecast_df: pd.DataFrame,
@@ -254,6 +438,9 @@ class ForecastActualComparator(AnomalyDetector):
     ) -> pd.DataFrame:
         """
         Detect anomalies with filtering options.
+
+        This is a convenience method for backward compatibility.
+        For more control, use the constructor parameters instead.
 
         Args:
             forecast_df: Forecast data in pivot format
