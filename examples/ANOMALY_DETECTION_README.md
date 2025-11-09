@@ -63,6 +63,28 @@ For each metric:
   - `channel`: "organic"
   - `landing_page`: "homepage"
 
+**⚠️ IMPORTANT**: `dimension_names` must match `transformer.columns` in the **same order**!
+
+```python
+# ✅ Correct - same order
+transformer = DataTransformer(
+    index="date",
+    columns=["platform", "channel", "landing_page"],
+    values="sessions"
+)
+detector = ForecastActualComparator(
+    transformer=transformer,
+    dimension_names=["platform", "channel", "landing_page"]  # Same order!
+)
+
+# ❌ Wrong - different order
+detector = ForecastActualComparator(
+    transformer=transformer,
+    dimension_names=["channel", "platform", "landing_page"]  # ERROR!
+)
+# ValueError: dimension_names must match transformer.columns in the same order
+```
+
 **Cumulative Threshold Filtering**
 - Filters to top X% of metrics by forecast value
 - Example: `cumulative_threshold=0.95` keeps top 95%
@@ -282,10 +304,20 @@ date       | platform | channel | landing_page | actual | forecast | q10 | q90 |
 
 ## Best Practices
 
-1. **Use Cumulative Threshold**: Focus on high-impact metrics with `cumulative_threshold=0.95`
-2. **Filter Intelligently**: Combine `return_only_anomalies=True` and `min_deviation_threshold=5.0`
-3. **Historical Tracking**: Use `if_exists="append"` in writers for trend analysis
-4. **Test Incrementally**: Start with basic detection, then add features as needed
+1. **Match dimension_names Order**: Always ensure `dimension_names` matches `transformer.columns` order. Use a constant:
+   ```python
+   DIMENSIONS = ["platform", "channel", "landing_page"]
+   transformer = DataTransformer(index="date", columns=DIMENSIONS, values="sessions")
+   detector = ForecastActualComparator(transformer=transformer, dimension_names=DIMENSIONS)
+   ```
+
+2. **Use Cumulative Threshold**: Focus on high-impact metrics with `cumulative_threshold=0.95`
+
+3. **Filter Intelligently**: Combine `return_only_anomalies=True` and `min_deviation_threshold=5.0`
+
+4. **Historical Tracking**: Use `if_exists="append"` in writers for trend analysis
+
+5. **Test Incrementally**: Start with basic detection, then add features as needed
 
 ## Troubleshooting
 
@@ -300,6 +332,18 @@ date       | platform | channel | landing_page | actual | forecast | q10 | q90 |
 
 **Problem**: "Metrics don't match"
 - **Solution**: Check pivot column names match forecast column names exactly
+
+**Problem**: "dimension_names must match transformer.columns in the same order"
+- **Solution**: Ensure `dimension_names` list matches `transformer.columns` exactly:
+  ```python
+  # ✅ Correct
+  columns=["platform", "channel"]
+  dimension_names=["platform", "channel"]
+
+  # ❌ Wrong
+  columns=["platform", "channel"]
+  dimension_names=["channel", "platform"]  # Different order!
+  ```
 
 ## Complete Examples
 

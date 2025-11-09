@@ -57,6 +57,40 @@ class ForecastActualComparator(AnomalyDetector):
         self.min_deviation_threshold = min_deviation_threshold
         self.format_deviation_as_string = format_deviation_as_string
 
+        # Validate dimension_names matches transformer.columns
+        if dimension_names is not None:
+            self._validate_dimension_names()
+
+    def _validate_dimension_names(self):
+        """
+        Validate that dimension_names matches transformer.columns order.
+
+        Raises:
+            ValueError: If dimension_names doesn't match transformer.columns
+        """
+        if not hasattr(self.transformer, 'columns'):
+            # Transformer doesn't expose columns, skip validation
+            return
+
+        # Convert transformer.columns to list for comparison
+        transformer_columns = self.transformer.columns
+        if isinstance(transformer_columns, str):
+            transformer_columns = [transformer_columns]
+        else:
+            transformer_columns = list(transformer_columns)
+
+        # Convert dimension_names to list for comparison
+        dimension_names = list(self.dimension_names)
+
+        # Check if they match
+        if dimension_names != transformer_columns:
+            raise ValueError(
+                f"dimension_names must match transformer.columns in the same order.\n"
+                f"  dimension_names: {dimension_names}\n"
+                f"  transformer.columns: {transformer_columns}\n"
+                f"Expected: dimension_names={transformer_columns}"
+            )
+
     def detect(
         self,
         forecast_df: pd.DataFrame,
