@@ -38,9 +38,9 @@ class AnomalyDetectionWorkflow:
         self.anomaly_detector = anomaly_detector
         self.data_writer = data_writer
 
-    def run(self) -> pd.DataFrame:
+    def _execute_detection(self) -> pd.DataFrame:
         """
-        Execute the complete anomaly detection workflow.
+        Shared detection logic for running anomaly detection.
 
         Returns:
             pd.DataFrame: The anomaly detection results
@@ -78,9 +78,20 @@ class AnomalyDetectionWorkflow:
                 "Anomaly detector returned empty results. Check your data and configuration."
             )
 
-        # Step 4: Write results to output
-        self.data_writer.write(anomaly_df)
+        return anomaly_df
 
+    def run(self) -> pd.DataFrame:
+        """
+        Execute the complete anomaly detection workflow.
+
+        Returns:
+            pd.DataFrame: The anomaly detection results
+
+        Raises:
+            ValueError: If loaded data is empty or incompatible
+        """
+        anomaly_df = self._execute_detection()
+        self.data_writer.write(anomaly_df)
         return anomaly_df
 
     def run_without_output(self) -> pd.DataFrame:
@@ -95,34 +106,4 @@ class AnomalyDetectionWorkflow:
         Raises:
             ValueError: If loaded data is empty or incompatible
         """
-        # Step 1: Load forecast data
-        forecast_df = self.forecast_reader.load()
-
-        # Validate forecast data
-        if forecast_df is None or forecast_df.empty:
-            raise ValueError(
-                "Forecast reader returned empty dataset. Cannot proceed with anomaly detection."
-            )
-
-        # Step 2: Load actual data
-        actual_df = self.actual_reader.load()
-
-        # Validate actual data
-        if actual_df is None or actual_df.empty:
-            raise ValueError(
-                "Actual reader returned empty dataset. Cannot proceed with anomaly detection."
-            )
-
-        # Step 3: Detect anomalies
-        anomaly_df = self.anomaly_detector.detect(
-            forecast_df=forecast_df,
-            actual_df=actual_df
-        )
-
-        # Validate anomaly detection results
-        if anomaly_df is None or anomaly_df.empty:
-            raise ValueError(
-                "Anomaly detector returned empty results. Check your data and configuration."
-            )
-
-        return anomaly_df
+        return self._execute_detection()

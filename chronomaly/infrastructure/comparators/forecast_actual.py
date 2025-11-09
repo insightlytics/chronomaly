@@ -2,6 +2,7 @@
 Forecast vs Actual anomaly detection implementation.
 """
 
+import warnings
 import pandas as pd
 import numpy as np
 from typing import Optional, Union, List
@@ -36,6 +37,12 @@ class ForecastActualComparator(AnomalyDetector):
         min_deviation_threshold: Minimum deviation threshold to include (e.g., 0.05 for 5%)
         format_deviation_as_string: If True, format deviation_pct as "15.3%" instead of 15.3
     """
+
+    # Quantile indices for pipe-separated forecast format
+    QUANTILE_POINT_IDX = 0
+    QUANTILE_Q10_IDX = 1
+    QUANTILE_Q90_IDX = 9
+    EXPECTED_QUANTILE_COUNT = 10
 
     def __init__(
         self,
@@ -119,7 +126,38 @@ class ForecastActualComparator(AnomalyDetector):
             TypeError: If inputs are not pandas DataFrames
             ValueError: If dataframes are empty or incompatible
         """
-        # Validate inputs
+        # Step 1: Validate inputs
+        self._validate_inputs(forecast_df, actual_df)
+
+        # Step 2: Prepare and standardize data
+        forecast_std, actual_std, all_columns = self._prepare_data(forecast_df, actual_df)
+
+        # Step 3: Compare all metrics
+        results = self._compare_all_metrics(forecast_std, actual_std, all_columns)
+
+        # Step 4: Create result dataframe
+        if not results:
+            return pd.DataFrame()
+
+        result_df = pd.DataFrame(results)
+
+        # Step 5: Post-process results
+        result_df = self._post_process_results(result_df)
+
+        return result_df
+
+    def _validate_inputs(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame) -> None:
+        """
+        Validate input DataFrames.
+
+        Args:
+            forecast_df: Forecast data
+            actual_df: Actual data
+
+        Raises:
+            TypeError: If inputs are not pandas DataFrames
+            ValueError: If dataframes are empty
+        """
         if not isinstance(forecast_df, pd.DataFrame):
             raise TypeError(
                 f"Expected pandas DataFrame for forecast_df, got {type(forecast_df).__name__}"
@@ -134,32 +172,63 @@ class ForecastActualComparator(AnomalyDetector):
         if actual_df.empty:
             raise ValueError("Actual DataFrame is empty")
 
-        # Step 1: Pivot actual data to match forecast format
+    def _prepare_data(
+        self,
+        forecast_df: pd.DataFrame,
+        actual_df: pd.DataFrame
+    ) -> tuple[pd.DataFrame, pd.DataFrame, list]:
+        """
+        Pivot and standardize data for comparison.
+
+        Args:
+            forecast_df: Forecast data in pivot format
+            actual_df: Actual data in raw format
+
+        Returns:
+            tuple: (forecast_std, actual_std, all_columns)
+        """
+        # Pivot actual data to match forecast format
         actual_pivot = self.transformer.pivot_table(actual_df)
         actual_pivot = actual_pivot.reset_index()
 
-        # Step 2: Standardize columns between forecast and actual
+        # Standardize columns between forecast and actual
         forecast_cols = set(forecast_df.columns) - set(self.exclude_columns)
         actual_cols = set(actual_pivot.columns) - set(self.exclude_columns)
 
         # Get all unique columns
         all_columns = sorted(forecast_cols.union(actual_cols))
 
-        # Standardize forecast dataframe
-        forecast_std = self._standardize_columns(
+        # Standardize forecast dataframe with string fill value
+        forecast_std = self._standardize_forecast_columns(
             forecast_df.copy(),
-            all_columns,
-            '0|0|0|0|0|0|0|0|0|0'  # Default pipe-separated zeros
+            all_columns
         )
 
-        # Standardize actual dataframe
-        actual_std = self._standardize_columns(
+        # Standardize actual dataframe with numeric fill value
+        actual_std = self._standardize_actual_columns(
             actual_pivot.copy(),
-            all_columns,
-            0.0  # Default numeric zero
+            all_columns
         )
 
-        # Step 3: Compare forecast and actual for each column
+        return forecast_std, actual_std, all_columns
+
+    def _compare_all_metrics(
+        self,
+        forecast_std: pd.DataFrame,
+        actual_std: pd.DataFrame,
+        all_columns: list
+    ) -> list:
+        """
+        Compare forecast and actual for all metrics across all rows.
+
+        Args:
+            forecast_std: Standardized forecast data
+            actual_std: Standardized actual data
+            all_columns: List of all metric columns to compare
+
+        Returns:
+            list: List of comparison result dictionaries
+        """
         results = []
 
         # Iterate through data rows (assuming single row or date-based rows)
@@ -183,17 +252,23 @@ class ForecastActualComparator(AnomalyDetector):
                 )
                 results.append(result)
 
-        # Step 4: Create result dataframe
-        if not results:
-            return pd.DataFrame()
+        return results
 
-        result_df = pd.DataFrame(results)
+    def _post_process_results(self, result_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Apply post-processing to results: dimension splitting, filtering, formatting.
 
-        # Step 5: Split metric names into dimension columns (if specified)
+        Args:
+            result_df: Raw anomaly detection results
+
+        Returns:
+            pd.DataFrame: Post-processed results
+        """
+        # Split metric names into dimension columns (if specified)
         if self.dimension_names:
             result_df = self._split_metric_to_dimensions(result_df)
 
-        # Step 6: Apply cumulative threshold filter (if specified)
+        # Apply cumulative threshold filter (if specified)
         if self.cumulative_threshold is not None:
             result_df = self._filter_cumulative_threshold(
                 result_df,
@@ -201,17 +276,17 @@ class ForecastActualComparator(AnomalyDetector):
                 self.cumulative_threshold
             )
 
-        # Step 7: Filter only anomalies (if specified)
+        # Filter only anomalies (if specified)
         if self.return_only_anomalies or self.min_deviation_threshold > 0:
             result_df = self._filter_anomalies(result_df)
 
-        # Step 8: Format deviation as string (if specified)
+        # Format deviation as string (if specified)
         if self.format_deviation_as_string and not result_df.empty:
             result_df['deviation_pct'] = (
                 (result_df['deviation_pct'].round(1).astype(str) + '%')
             )
 
-        # Step 9: Remove metric column if dimensions were extracted
+        # Remove metric column if dimensions were extracted
         if self.dimension_names and 'metric' in result_df.columns:
             result_df = result_df.drop(columns=['metric'])
 
@@ -250,6 +325,42 @@ class ForecastActualComparator(AnomalyDetector):
 
         return df
 
+    def _standardize_forecast_columns(
+        self,
+        df: pd.DataFrame,
+        column_list: List[str]
+    ) -> pd.DataFrame:
+        """
+        Standardize forecast DataFrame columns with string fill values.
+
+        Args:
+            df: Forecast DataFrame to standardize
+            column_list: List of columns that should exist
+
+        Returns:
+            pd.DataFrame: Standardized forecast dataframe
+        """
+        fill_value = '0|0|0|0|0|0|0|0|0|0'  # Default pipe-separated zeros
+        return self._standardize_columns(df, column_list, fill_value)
+
+    def _standardize_actual_columns(
+        self,
+        df: pd.DataFrame,
+        column_list: List[str]
+    ) -> pd.DataFrame:
+        """
+        Standardize actual DataFrame columns with numeric fill values.
+
+        Args:
+            df: Actual DataFrame to standardize
+            column_list: List of columns that should exist
+
+        Returns:
+            pd.DataFrame: Standardized actual dataframe
+        """
+        fill_value = 0.0  # Default numeric zero
+        return self._standardize_columns(df, column_list, fill_value)
+
     def _compare_metric(
         self,
         column: str,
@@ -273,10 +384,17 @@ class ForecastActualComparator(AnomalyDetector):
         forecast_parts = str(forecast_value).split('|')
 
         try:
-            # Extract values: point (index 0), q10 (index 1), q90 (index 9)
-            point_forecast = float(forecast_parts[0]) if len(forecast_parts) > 0 else 0.0
-            q10 = float(forecast_parts[1]) if len(forecast_parts) > 1 else 0.0
-            q90 = float(forecast_parts[9]) if len(forecast_parts) > 9 else 0.0
+            # Extract values using class constants
+            point_forecast = float(forecast_parts[self.QUANTILE_POINT_IDX]) if len(forecast_parts) > self.QUANTILE_POINT_IDX else 0.0
+            q10 = float(forecast_parts[self.QUANTILE_Q10_IDX]) if len(forecast_parts) > self.QUANTILE_Q10_IDX else 0.0
+            q90 = float(forecast_parts[self.QUANTILE_Q90_IDX]) if len(forecast_parts) > self.QUANTILE_Q90_IDX else 0.0
+
+            # Validate quantile count
+            if len(forecast_parts) < self.EXPECTED_QUANTILE_COUNT:
+                warnings.warn(
+                    f"Expected {self.EXPECTED_QUANTILE_COUNT} quantiles, got {len(forecast_parts)}. "
+                    f"Using available values."
+                )
         except (ValueError, IndexError):
             # Invalid forecast format
             point_forecast = 0.0
@@ -293,19 +411,35 @@ class ForecastActualComparator(AnomalyDetector):
         status = 'NO_FORECAST'
         deviation_pct = 0.0
 
-        if pd.isna(q10) or pd.isna(q90):
+        # Check for invalid or missing forecasts
+        if pd.isna(q10) or pd.isna(q90) or pd.isna(point_forecast):
             status = 'NO_FORECAST'
-        elif q10 == 0 and q90 == 0:
+        elif q10 == 0 and q90 == 0 and point_forecast == 0:
+            # All forecast values are zero - no valid forecast
             status = 'NO_FORECAST'
         elif q10 <= actual <= q90:
             status = 'IN_RANGE'
         else:
             if actual < q10:
                 status = 'BELOW_P10'
-                deviation_pct = ((q10 - actual) / q10 * 100) if q10 != 0 else 0.0
+                # Calculate deviation percentage with proper zero handling
+                if q10 != 0:
+                    deviation_pct = ((q10 - actual) / q10 * 100)
+                elif actual != 0:
+                    # q10 is 0 but actual is negative - use absolute difference
+                    deviation_pct = abs(actual) * 100
+                else:
+                    deviation_pct = 0.0
             elif actual > q90:
                 status = 'ABOVE_P90'
-                deviation_pct = ((actual - q90) / q90 * 100) if q90 != 0 else 0.0
+                # Calculate deviation percentage with proper zero handling
+                if q90 != 0:
+                    deviation_pct = ((actual - q90) / q90 * 100)
+                elif actual != 0:
+                    # q90 is 0 but actual is positive - use absolute value
+                    deviation_pct = abs(actual) * 100
+                else:
+                    deviation_pct = 0.0
 
         result = {
             'metric': column,
@@ -375,25 +509,21 @@ class ForecastActualComparator(AnomalyDetector):
         if total_value == 0:
             return df.copy()
 
-        # Sort by value descending
-        sorted_df = df.sort_values(value_column, ascending=False).copy()
-        sorted_df['_cumulative'] = sorted_df[value_column].cumsum()
-        sorted_df['_cumulative_pct'] = sorted_df['_cumulative'] / total_value
+        # Sort values and calculate cumulative sum without creating DataFrame copy
+        sorted_values = df[value_column].sort_values(ascending=False)
+        cumulative_sum = sorted_values.cumsum()
+        cumulative_pct = cumulative_sum / total_value
 
-        # Find threshold index
-        threshold_rows = sorted_df[sorted_df['_cumulative_pct'] >= threshold_pct]
-
-        if len(threshold_rows) > 0:
-            threshold_idx = threshold_rows.index[0]
-            rows_to_keep = sorted_df.loc[:threshold_idx]
-            min_threshold = rows_to_keep[value_column].min()
+        # Find minimum threshold value
+        threshold_mask = cumulative_pct >= threshold_pct
+        if threshold_mask.any():
+            threshold_idx = threshold_mask.idxmax()
+            min_threshold = sorted_values.loc[:threshold_idx].min()
         else:
-            min_threshold = sorted_df[value_column].min()
+            min_threshold = sorted_values.min()
 
-        # Filter original DataFrame
-        filtered_df = df[df[value_column] >= min_threshold].copy()
-
-        return filtered_df
+        # Filter original DataFrame by threshold
+        return df[df[value_column] >= min_threshold].copy()
 
     def _filter_anomalies(self, df: pd.DataFrame) -> pd.DataFrame:
         """
