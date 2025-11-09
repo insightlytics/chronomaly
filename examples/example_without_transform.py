@@ -13,11 +13,13 @@ def main():
     # Step 1: Configure data source
     # Assuming CSV is already in pivot format with date as index
     # and each column representing a different time series
+    # BUG-43 FIX: Clarify that index_col and parse_dates are pandas.read_csv() parameters
+    # passed through CSVDataReader's **kwargs
     data_reader = CSVDataReader(
         file_path="data/sales_pivot.csv",
         date_column="date",
-        index_col="date",  # Set date as index
-        parse_dates=True
+        index_col="date",  # pandas.read_csv() parameter - set date as index
+        parse_dates=True   # pandas.read_csv() parameter - parse date strings
     )
 
     # Step 2: Configure forecaster

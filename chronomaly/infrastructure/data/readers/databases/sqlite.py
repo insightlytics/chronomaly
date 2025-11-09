@@ -4,6 +4,8 @@ SQLite data reader implementation.
 
 import pandas as pd
 import sqlite3
+import os
+import re
 from typing import Optional, Dict, Any
 from ..base import DataReader
 
@@ -17,6 +19,13 @@ class SQLiteDataReader(DataReader):
         query: SQL query to execute
         date_column: Name of the date column (will be parsed as datetime)
         **kwargs: Additional arguments to pass to pandas.read_sql_query()
+
+    Security Notes:
+        - The query parameter is executed directly on SQLite. Ensure queries
+          are from trusted sources and properly validated to prevent SQL injection.
+        - Never pass user-controlled input directly into queries without validation.
+        - Consider using parameterized queries for user inputs.
+        - database_path is validated to prevent path traversal attacks.
     """
 
     def __init__(
@@ -26,10 +35,77 @@ class SQLiteDataReader(DataReader):
         date_column: Optional[str] = None,
         **kwargs: Any
     ):
-        self.database_path = database_path
+        # BUG-19 FIX: Validate database path to prevent path traversal
+        if not database_path:
+            raise ValueError("database_path cannot be empty")
+
+        # Resolve to absolute path
+        abs_path = os.path.abspath(database_path)
+
+        # Check if file exists
+        if not os.path.isfile(abs_path):
+            raise FileNotFoundError(
+                f"Database file not found: {abs_path}"
+            )
+
+        # Check if file is readable
+        if not os.access(abs_path, os.R_OK):
+            raise PermissionError(
+                f"Database file is not readable: {abs_path}"
+            )
+
+        self.database_path = abs_path
+
+        # BUG-14 FIX: Add basic SQL injection protection
+        if not query or not query.strip():
+            raise ValueError("Query cannot be empty")
+
+        self._validate_query(query)
         self.query = query
+
         self.date_column = date_column
         self.read_sql_kwargs = kwargs
+
+    def _validate_query(self, query: str) -> None:
+        """
+        Validate SQL query for obvious injection attempts.
+
+        This is a basic validation and should not be relied upon as the sole
+        security measure. Always ensure queries come from trusted sources.
+
+        Args:
+            query: SQL query to validate
+
+        Raises:
+            ValueError: If query contains suspicious patterns
+        """
+        query_lower = query.lower()
+
+        # Check for multiple statements
+        if query.count(';') > 1:
+            raise ValueError(
+                "Query contains multiple statements. "
+                "Only single SQL statements are allowed."
+            )
+
+        # Remove trailing semicolons
+        query_check = query_lower.rstrip('; \t\n')
+
+        # Check for SQL comments
+        if '--' in query_check or '/*' in query_check:
+            raise ValueError(
+                "SQL comments are not allowed in queries for security reasons"
+            )
+
+        # Check for dangerous keywords
+        dangerous_keywords = ['drop', 'delete', 'truncate', 'alter', 'create']
+        for keyword in dangerous_keywords:
+            if re.search(r'\b' + keyword + r'\b', query_lower):
+                if not query_lower.strip().startswith('select'):
+                    raise ValueError(
+                        f"Query contains potentially dangerous keyword: {keyword}. "
+                        f"Only SELECT queries are recommended."
+                    )
 
     def load(self) -> pd.DataFrame:
         """

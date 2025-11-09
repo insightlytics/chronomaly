@@ -3,6 +3,7 @@ CSV data reader implementation.
 """
 
 import pandas as pd
+import os
 from typing import Optional, Dict, Any
 from ..base import DataReader
 
@@ -15,6 +16,10 @@ class CSVDataReader(DataReader):
         file_path: Path to the CSV file
         date_column: Name of the date column (will be parsed as datetime)
         **kwargs: Additional arguments to pass to pandas.read_csv()
+
+    Security Notes:
+        - file_path is validated to prevent path traversal attacks.
+        - Only files that exist and are readable will be processed.
     """
 
     def __init__(
@@ -23,7 +28,26 @@ class CSVDataReader(DataReader):
         date_column: Optional[str] = None,
         **kwargs: Any
     ):
-        self.file_path = file_path
+        # BUG-17 FIX: Validate file path to prevent path traversal
+        if not file_path:
+            raise ValueError("file_path cannot be empty")
+
+        # Resolve to absolute path
+        abs_path = os.path.abspath(file_path)
+
+        # BUG-41 FIX: Check if file exists
+        if not os.path.isfile(abs_path):
+            raise FileNotFoundError(
+                f"CSV file not found: {abs_path}"
+            )
+
+        # Check if file is readable
+        if not os.access(abs_path, os.R_OK):
+            raise PermissionError(
+                f"CSV file is not readable: {abs_path}"
+            )
+
+        self.file_path = abs_path
         self.date_column = date_column
         self.read_csv_kwargs = kwargs
 
@@ -33,8 +57,22 @@ class CSVDataReader(DataReader):
 
         Returns:
             pd.DataFrame: The loaded data
+
+        Raises:
+            FileNotFoundError: If CSV file does not exist
+            ValueError: If date_column is not found or data is invalid
         """
-        df = pd.read_csv(self.file_path, **self.read_csv_kwargs)
+        try:
+            df = pd.read_csv(self.file_path, **self.read_csv_kwargs)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to read CSV file '{self.file_path}': {str(e)}"
+            ) from e
+
+        if df.empty:
+            raise ValueError(
+                f"CSV file is empty: {self.file_path}"
+            )
 
         if self.date_column:
             if self.date_column not in df.columns:
@@ -42,6 +80,12 @@ class CSVDataReader(DataReader):
                     f"date_column '{self.date_column}' not found in CSV file. "
                     f"Available columns: {list(df.columns)}"
                 )
-            df[self.date_column] = pd.to_datetime(df[self.date_column])
+
+            try:
+                df[self.date_column] = pd.to_datetime(df[self.date_column])
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to parse date_column '{self.date_column}' as datetime: {str(e)}"
+                ) from e
 
         return df

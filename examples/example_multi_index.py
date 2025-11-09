@@ -58,7 +58,8 @@ def main():
     print(forecast_df_flat.head())
 
     # Step 8: Write to output
-    output_writer.write(forecast_df_flat)
+    # BUG-42 FIX: Corrected variable name from output_writer to data_writer
+    data_writer.write(forecast_df_flat)
     print("\nForecast saved to SQLite!")
 
 

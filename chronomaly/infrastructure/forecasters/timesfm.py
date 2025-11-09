@@ -33,6 +33,8 @@ class TimesFMForecaster(Forecaster):
         force_flip_invariance: Force flip invariance (default: True)
         infer_is_positive: Infer if data is positive (default: True)
         fix_quantile_crossing: Fix quantile crossing (default: True)
+        frequency: Pandas frequency string for forecast dates (default: 'D' for daily)
+                  Common values: 'D' (daily), 'H' (hourly), 'W' (weekly), 'M' (monthly)
         **kwargs: Additional configuration parameters
     """
 
@@ -46,9 +48,12 @@ class TimesFMForecaster(Forecaster):
         force_flip_invariance: bool = True,
         infer_is_positive: bool = True,
         fix_quantile_crossing: bool = True,
+        frequency: str = 'D',
         **kwargs: Any
     ):
         self.model_name = model_name
+        self.max_horizon = max_horizon  # Store for validation
+        self.frequency = frequency  # BUG-34 FIX: Make frequency configurable
         self.config = timesfm.ForecastConfig(
             max_context=max_context,
             max_horizon=max_horizon,
@@ -94,17 +99,52 @@ class TimesFMForecaster(Forecaster):
 
         Returns:
             pd.DataFrame: Forecast results with date column and quantile values
+
+        Raises:
+            TypeError: If dataframe is not a pandas DataFrame
+            ValueError: If dataframe is empty, has no columns, or horizon is invalid
         """
+        # BUG-44 FIX: Validate dataframe type
+        if not isinstance(dataframe, pd.DataFrame):
+            raise TypeError(
+                f"Expected pandas DataFrame, got {type(dataframe).__name__}"
+            )
+
+        # BUG-32 FIX: Validate dataframe is not empty
+        if dataframe.empty:
+            raise ValueError("Cannot forecast on empty DataFrame")
+
+        if len(dataframe.columns) == 0:
+            raise ValueError("DataFrame has no columns to forecast")
+
+        # BUG-33 FIX: Validate horizon
+        if not isinstance(horizon, int):
+            raise TypeError(f"horizon must be an integer, got {type(horizon).__name__}")
+
+        if horizon <= 0:
+            raise ValueError(f"horizon must be positive, got {horizon}")
+
+        if horizon > self.max_horizon:
+            raise ValueError(
+                f"Requested horizon ({horizon}) exceeds max_horizon ({self.max_horizon}). "
+                f"Please reduce horizon or increase max_horizon in forecaster configuration."
+            )
+
         model = self._get_model()
 
         # Prepare inputs - each column is a separate time series
         inputs = [dataframe[column].values for column in dataframe.columns]
 
         # Generate forecasts
-        forecast_point, forecast_quantile = model.forecast(
-            horizon=horizon,
-            inputs=inputs
-        )
+        try:
+            forecast_point, forecast_quantile = model.forecast(
+                horizon=horizon,
+                inputs=inputs
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"TimesFM forecast failed: {str(e)}"
+            ) from e
 
         if return_point:
             # Return point forecasts
@@ -130,8 +170,12 @@ class TimesFMForecaster(Forecaster):
             pd.Timestamp: The last date in the index
 
         Raises:
-            ValueError: If index cannot be converted to datetime
+            ValueError: If index cannot be converted to datetime or dataframe is empty
         """
+        # BUG-46 FIX: Check if dataframe is empty before accessing index
+        if dataframe.empty or len(dataframe) == 0:
+            raise ValueError("Cannot get last date from empty DataFrame")
+
         # Get the last index value
         last_idx = dataframe.index[-1]
 
@@ -190,12 +234,27 @@ class TimesFMForecaster(Forecaster):
         """
         forecast_data = forecast_point.T
 
+        # BUG-34 FIX: Use configurable frequency instead of hardcoded 'D'
         # Generate future dates
         last_date = self._get_last_date(dataframe)
+
+        # Calculate the appropriate offset based on frequency
+        if self.frequency == 'D':
+            start_date = last_date + pd.Timedelta(days=1)
+        elif self.frequency == 'H':
+            start_date = last_date + pd.Timedelta(hours=1)
+        elif self.frequency == 'W':
+            start_date = last_date + pd.Timedelta(weeks=1)
+        elif self.frequency == 'M':
+            start_date = last_date + pd.DateOffset(months=1)
+        else:
+            # For other frequencies, use pd.date_range to calculate offset
+            start_date = last_date + pd.tseries.frequencies.to_offset(self.frequency)
+
         new_index = pd.date_range(
-            start=last_date + pd.Timedelta(days=1),
+            start=start_date,
             periods=horizon,
-            freq='D'
+            freq=self.frequency
         )
 
         # Create forecast dataframe
@@ -254,12 +313,26 @@ class TimesFMForecaster(Forecaster):
 
         forecast_data = np.array(forecast_data, dtype=object).T
 
+        # BUG-34 FIX: Use configurable frequency instead of hardcoded 'D'
         # Generate future dates
         last_date = self._get_last_date(dataframe)
+
+        # Calculate the appropriate offset based on frequency
+        if self.frequency == 'D':
+            start_date = last_date + pd.Timedelta(days=1)
+        elif self.frequency == 'H':
+            start_date = last_date + pd.Timedelta(hours=1)
+        elif self.frequency == 'W':
+            start_date = last_date + pd.Timedelta(weeks=1)
+        elif self.frequency == 'M':
+            start_date = last_date + pd.DateOffset(months=1)
+        else:
+            start_date = last_date + pd.tseries.frequencies.to_offset(self.frequency)
+
         new_index = pd.date_range(
-            start=last_date + pd.Timedelta(days=1),
+            start=start_date,
             periods=forecast_quantile_horizons,
-            freq='D'
+            freq=self.frequency
         )
 
         # Create forecast dataframe
