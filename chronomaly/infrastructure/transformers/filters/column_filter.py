@@ -1,16 +1,28 @@
 """
-Column filter - filters rows based on numeric column thresholds.
+Column filter - DEPRECATED: Use ValueFilter instead.
+
+This module is kept for backward compatibility.
+ColumnFilter is now an alias to ValueFilter with numeric filtering.
 """
 
-import pandas as pd
-from .base import DataFrameFilter
+import warnings
+from .value_filter import ValueFilter
 
 
-class ColumnFilter(DataFrameFilter):
+class ColumnFilter(ValueFilter):
     """
+    DEPRECATED: Use ValueFilter instead.
+
     Filter DataFrame rows based on numeric column thresholds.
 
-    This is a GENERAL filter for any numeric filtering.
+    This class is now an alias to ValueFilter for backward compatibility.
+    New code should use ValueFilter directly:
+
+        # Old way (still works):
+        filter = ColumnFilter('deviation_pct', min_value=10.0)
+
+        # New way (recommended):
+        filter = ValueFilter('deviation_pct', min_value=10.0)
 
     Args:
         column: Column name to filter on
@@ -36,32 +48,16 @@ class ColumnFilter(DataFrameFilter):
         min_value: float = None,
         max_value: float = None
     ):
-        if min_value is None and max_value is None:
-            raise ValueError("At least one of min_value or max_value must be specified")
+        warnings.warn(
+            "ColumnFilter is deprecated. Use ValueFilter instead: "
+            "ValueFilter('column', min_value=X, max_value=Y)",
+            DeprecationWarning,
+            stacklevel=2
+        )
 
-        self.column = column
-        self.min_value = min_value
-        self.max_value = max_value
-
-    def filter(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Filter DataFrame by column threshold.
-
-        Args:
-            df: Input DataFrame
-
-        Returns:
-            pd.DataFrame: Filtered DataFrame
-        """
-        if df.empty or self.column not in df.columns:
-            return df.copy()
-
-        result = df.copy()
-
-        if self.min_value is not None:
-            result = result[result[self.column] >= self.min_value]
-
-        if self.max_value is not None:
-            result = result[result[self.column] <= self.max_value]
-
-        return result
+        # Call parent ValueFilter with numeric parameters
+        super().__init__(
+            column=column,
+            min_value=min_value,
+            max_value=max_value
+        )

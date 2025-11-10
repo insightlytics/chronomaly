@@ -79,8 +79,7 @@ print("\n📋 WORKFLOW CONFIGURATION")
 print("=" * 70)
 print("Input:        /tmp/comprehensive_forecast.csv (7 metrics)")
 print("              /tmp/comprehensive_actual.csv")
-print("Transformers: ValueFilter (only anomalies)")
-print("              ColumnFilter (min 10% deviation)")
+print("Transformers: ValueFilter (categorical + numeric filtering)")
 print("              PercentageFormatter (format as percentage)")
 print("Output:       /tmp/filtered_anomalies.db")
 print()
@@ -99,13 +98,8 @@ from chronomaly.infrastructure.anomaly_detectors import ForecastActualAnomalyDet
 from chronomaly.infrastructure.transformers import DataTransformer
 
 # Import general-purpose transformers
-from chronomaly.infrastructure.transformers.filters import (
-    ValueFilter,
-    ColumnFilter
-)
-from chronomaly.infrastructure.transformers.formatters import (
-    PercentageFormatter
-)
+from chronomaly.infrastructure.transformers.filters import ValueFilter
+from chronomaly.infrastructure.transformers.formatters import PercentageFormatter
 
 # Configure readers
 forecast_reader = CSVDataReader('/tmp/comprehensive_forecast.csv')
@@ -140,7 +134,7 @@ anomaly_filter = ValueFilter(
 )
 
 # Transformer 2: Keep only significant deviations (>10%)
-deviation_filter = ColumnFilter(
+deviation_filter = ValueFilter(
     column='deviation_pct',
     min_value=10.0
 )
@@ -197,8 +191,8 @@ Step 3: DETECT ANOMALIES
 
 Step 4: TRANSFORM (after_detection)
   Input:  7 detection results
-  Filter: ValueFilter → Keep only ABOVE_UPPER/BELOW_LOWER
-  Filter: ColumnFilter → Keep only >10% deviation
+  Filter: ValueFilter (status) → Keep only ABOVE_UPPER/BELOW_LOWER
+  Filter: ValueFilter (deviation_pct) → Keep only >10% deviation
   Format: PercentageFormatter → "16.7%" instead of 16.7
   Output: 2 significant anomalies
 
@@ -235,7 +229,7 @@ print("""
    ✓ Example: ValueFilter can filter forecast, actual, or anomaly data
 
 2. TRANSFORMER TYPES
-   ✓ Filters: ValueFilter, ColumnFilter, etc.
+   ✓ Filters: ValueFilter (unified - supports categorical & numeric filtering)
    ✓ Formatters: PercentageFormatter, ColumnFormatter, etc.
    ✓ Pivot: DataTransformer (wide ↔ long format)
 
@@ -263,13 +257,13 @@ workflow = AnomalyDetectionWorkflow(
             ValueFilter('date', datetime(2024, 11, 1), mode='include')
         ],
         'after_actual_read': [
-            # Filter actual data before detection
-            ColumnFilter('sessions', min_value=100)
+            # Filter actual data before detection (numeric filtering)
+            ValueFilter('sessions', min_value=100)
         ],
         'after_detection': [
             # Filter and format results
-            ValueFilter('status', ['BELOW_LOWER', 'ABOVE_UPPER']),
-            ColumnFilter('deviation_pct', min_value=20.0),
+            ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER']),  # Categorical
+            ValueFilter('deviation_pct', min_value=20.0),  # Numeric
             PercentageFormatter('deviation_pct', decimal_places=2)
         ]
     }
@@ -277,23 +271,23 @@ workflow = AnomalyDetectionWorkflow(
 
 # Example 2: Focus on specific dimensions
 transformers_after_detection = [
-    ValueFilter('platform', ['desktop', 'mobile']),  # Exclude tablet
-    ValueFilter('status', ['BELOW_LOWER', 'ABOVE_UPPER']),
+    ValueFilter('platform', values=['desktop', 'mobile']),  # Categorical filtering
+    ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER']),
     PercentageFormatter('deviation_pct')
 ]
 
 # Example 3: Multi-tier alerting
 # Critical anomalies (>50% deviation)
 critical_transformers = [
-    ValueFilter('status', ['BELOW_LOWER', 'ABOVE_UPPER']),
-    ColumnFilter('deviation_pct', min_value=50.0),
+    ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER']),
+    ValueFilter('deviation_pct', min_value=50.0),  # Numeric filtering
     PercentageFormatter('deviation_pct')
 ]
 
 # Warning anomalies (20-50% deviation)
 warning_transformers = [
-    ValueFilter('status', ['BELOW_LOWER', 'ABOVE_UPPER']),
-    ColumnFilter('deviation_pct', min_value=20.0, max_value=50.0),
+    ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER']),
+    ValueFilter('deviation_pct', min_value=20.0, max_value=50.0),  # Numeric range
     PercentageFormatter('deviation_pct')
 ]
 '''
