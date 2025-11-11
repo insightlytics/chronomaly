@@ -7,9 +7,10 @@ import pandas as pd
 import numpy as np
 from typing import Optional, List, Dict, Callable
 from .base import AnomalyDetector
+from ...shared import TransformableMixin
 
 
-class ForecastActualAnomalyDetector(AnomalyDetector):
+class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
     """
     Anomaly detector that compares forecast quantiles with actual values.
 
@@ -49,33 +50,6 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
         self.upper_quantile_idx = upper_quantile_idx
         self.transformers = transformers or {}
 
-    def _apply_transformers(self, df: pd.DataFrame, stage: str) -> pd.DataFrame:
-        """
-        Apply transformers for a specific stage.
-
-        Args:
-            df: DataFrame to transform
-            stage: Stage name ('after')
-
-        Returns:
-            pd.DataFrame: Transformed DataFrame
-        """
-        if stage not in self.transformers:
-            return df
-
-        result = df
-        for transformer in self.transformers[stage]:
-            # Support both .filter() and .format() methods
-            if hasattr(transformer, 'filter'):
-                result = transformer.filter(result)
-            elif hasattr(transformer, 'format'):
-                result = transformer.format(result)
-            elif callable(transformer):
-                result = transformer(result)
-            else:
-                raise TypeError(f"Transformer must have .filter(), .format() method or be callable")
-
-        return result
 
     def detect(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame) -> pd.DataFrame:
         """Detect anomalies by comparing forecast quantiles with actual values."""
@@ -97,6 +71,17 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
         return result_df
 
     def _validate_inputs(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame):
+        """
+        Validate input DataFrames.
+
+        Args:
+            forecast_df: Forecast data (pivoted format)
+            actual_df: Actual data (must be pivoted format)
+
+        Raises:
+            TypeError: If inputs are not DataFrames
+            ValueError: If DataFrames are empty or actual_df is not pivoted
+        """
         if not isinstance(forecast_df, pd.DataFrame):
             raise TypeError(f"Expected DataFrame for forecast_df, got {type(forecast_df).__name__}")
         if not isinstance(actual_df, pd.DataFrame):
@@ -105,6 +90,44 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
             raise ValueError("Forecast DataFrame is empty")
         if actual_df.empty:
             raise ValueError("Actual DataFrame is empty")
+
+        # Validate that actual_df is in pivoted format
+        self._validate_pivoted_format(actual_df)
+
+    def _validate_pivoted_format(self, df: pd.DataFrame) -> None:
+        """
+        Validate that DataFrame is in pivoted (wide) format, not long format.
+
+        Pivoted format characteristics:
+        - Has date column + multiple metric columns
+        - Metric columns contain numeric values
+        - NOT long format (date, metric_name, value columns)
+
+        Args:
+            df: DataFrame to validate
+
+        Raises:
+            ValueError: If DataFrame appears to be in long format instead of pivoted
+        """
+        # Check for common long-format column names
+        long_format_indicators = ['metric', 'metric_name', 'value', 'values', 'measure']
+        df_columns_lower = [col.lower() for col in df.columns]
+
+        for indicator in long_format_indicators:
+            if indicator in df_columns_lower:
+                raise ValueError(
+                    f"actual_df appears to be in long format (contains '{indicator}' column). "
+                    f"Please pivot the data using PivotTransformer before passing to detect(). "
+                    f"Example: actual_df_pivoted = PivotTransformer(...)(actual_df)"
+                )
+
+        # Check that we have more than just the date column
+        non_date_columns = [col for col in df.columns if col not in self.exclude_columns]
+        if len(non_date_columns) == 0:
+            raise ValueError(
+                "actual_df has no metric columns (only date column found). "
+                "Please ensure data is pivoted with metric columns."
+            )
 
     def _prepare_data(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame):
         # Assume actual_df is already pivoted (use PivotTransformer outside if needed)

@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from typing import Optional, Dict, Any, List, Callable
 from .base import Forecaster
+from ...shared import TransformableMixin
 
 try:
     import timesfm
@@ -17,7 +18,7 @@ except ImportError:
     )
 
 
-class TimesFMForecaster(Forecaster):
+class TimesFMForecaster(Forecaster, TransformableMixin):
     """
     Forecaster implementation using Google's TimesFM model.
 
@@ -87,33 +88,6 @@ class TimesFMForecaster(Forecaster):
 
         return self._model
 
-    def _apply_transformers(self, df: pd.DataFrame, stage: str) -> pd.DataFrame:
-        """
-        Apply transformers for a specific stage.
-
-        Args:
-            df: DataFrame to transform
-            stage: Stage name ('before', 'after')
-
-        Returns:
-            pd.DataFrame: Transformed DataFrame
-        """
-        if stage not in self.transformers:
-            return df
-
-        result = df
-        for transformer in self.transformers[stage]:
-            # Support both .filter() and .format() methods
-            if hasattr(transformer, 'filter'):
-                result = transformer.filter(result)
-            elif hasattr(transformer, 'format'):
-                result = transformer.format(result)
-            elif callable(transformer):
-                result = transformer(result)
-            else:
-                raise TypeError(f"Transformer must have .filter(), .format() method or be callable")
-
-        return result
 
     def forecast(
         self,

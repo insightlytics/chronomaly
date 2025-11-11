@@ -6,9 +6,10 @@ import pandas as pd
 import os
 from typing import Optional, Dict, Any, List, Callable
 from ..base import DataReader
+from ....shared import TransformableMixin
 
 
-class CSVDataReader(DataReader):
+class CSVDataReader(DataReader, TransformableMixin):
     """
     Data reader implementation for CSV files.
 
@@ -55,34 +56,6 @@ class CSVDataReader(DataReader):
         self.date_column = date_column
         self.transformers = transformers or {}
         self.read_csv_kwargs = kwargs
-
-    def _apply_transformers(self, df: pd.DataFrame, stage: str) -> pd.DataFrame:
-        """
-        Apply transformers for a specific stage.
-
-        Args:
-            df: DataFrame to transform
-            stage: Stage name ('after')
-
-        Returns:
-            pd.DataFrame: Transformed DataFrame
-        """
-        if stage not in self.transformers:
-            return df
-
-        result = df
-        for transformer in self.transformers[stage]:
-            # Support both .filter() and .format() methods
-            if hasattr(transformer, 'filter'):
-                result = transformer.filter(result)
-            elif hasattr(transformer, 'format'):
-                result = transformer.format(result)
-            elif callable(transformer):
-                result = transformer(result)
-            else:
-                raise TypeError(f"Transformer must have .filter(), .format() method or be callable")
-
-        return result
 
     def load(self) -> pd.DataFrame:
         """

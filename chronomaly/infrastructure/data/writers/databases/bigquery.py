@@ -6,9 +6,10 @@ import pandas as pd
 from typing import Optional, Dict, List, Callable
 from google.cloud import bigquery
 from ..base import DataWriter
+from .....shared import TransformableMixin
 
 
-class BigQueryDataWriter(DataWriter):
+class BigQueryDataWriter(DataWriter, TransformableMixin):
     """
     Data writer implementation for Google BigQuery.
 
@@ -82,33 +83,6 @@ class BigQueryDataWriter(DataWriter):
                 self._client = bigquery.Client(project=self.project)
         return self._client
 
-    def _apply_transformers(self, df: pd.DataFrame, stage: str) -> pd.DataFrame:
-        """
-        Apply transformers for a specific stage.
-
-        Args:
-            df: DataFrame to transform
-            stage: Stage name ('before', 'after')
-
-        Returns:
-            pd.DataFrame: Transformed DataFrame
-        """
-        if stage not in self.transformers:
-            return df
-
-        result = df
-        for transformer in self.transformers[stage]:
-            # Support both .filter() and .format() methods
-            if hasattr(transformer, 'filter'):
-                result = transformer.filter(result)
-            elif hasattr(transformer, 'format'):
-                result = transformer.format(result)
-            elif callable(transformer):
-                result = transformer(result)
-            else:
-                raise TypeError(f"Transformer must have .filter(), .format() method or be callable")
-
-        return result
 
     def write(self, dataframe: pd.DataFrame) -> None:
         """
