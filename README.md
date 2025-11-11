@@ -154,10 +154,19 @@ from chronomaly.infrastructure.data.writers.databases import SQLiteDataWriter
 from chronomaly.infrastructure.forecasters import TimesFMForecaster
 from chronomaly.infrastructure.transformers import PivotTransformer
 
-# CSV reader
+# CSV reader with pivot transformation applied after loading
 reader = CSVDataReader(
     file_path="data/raw_data.csv",
-    date_column="date"
+    date_column="date",
+    transformers={
+        'after': [
+            PivotTransformer(
+                index='date',
+                columns=['platform', 'channel'],  # Dimensions
+                values='sessions'  # Value column
+            )
+        ]
+    }
 )
 
 # SQLite writer
@@ -166,22 +175,14 @@ writer = SQLiteDataWriter(
     table_name="forecasts"
 )
 
-# Pivot transformer (combine platform and channel)
-transformer = PivotTransformer(
-    date_column='date',
-    columns=['platform', 'channel'],  # Dimensions
-    values='sessions'  # Value column
-)
-
 # Forecaster
 forecaster = TimesFMForecaster(frequency='D')
 
-# Workflow
+# Workflow (no transformer parameter - transformations are at component level)
 workflow = ForecastWorkflow(
     data_reader=reader,
     forecaster=forecaster,
-    data_writer=writer,
-    transformer=transformer
+    data_writer=writer
 )
 
 # 7-day forecast
@@ -247,7 +248,7 @@ forecast_reader = BigQueryDataReader(
 )
 
 # Actual data reader (reads real/observed values to compare against forecasts)
-# Note: Typically uses a different data source than forecast_reader
+# Note: Pivot transformation is applied after loading the data
 actual_reader = BigQueryDataReader(
     service_account_file="path/to/service-account.json",
     project="my-project",
@@ -256,7 +257,16 @@ actual_reader = BigQueryDataReader(
         FROM `project.dataset.actuals`
         WHERE date = CURRENT_DATE()
     """,
-    date_column="date"
+    date_column="date",
+    transformers={
+        'after': [
+            PivotTransformer(
+                index='date',
+                columns=['platform', 'channel'],
+                values='sessions'
+            )
+        ]
+    }
 )
 
 # Anomaly writer
@@ -267,16 +277,8 @@ anomaly_writer = BigQueryDataWriter(
     table="anomalies"
 )
 
-# Pivot transformer for actual data
-transformer = PivotTransformer(
-    date_column='date',
-    columns=['platform', 'channel'],
-    values='sessions'
-)
-
-# Anomaly detector
+# Anomaly detector (no transformer parameter - data is already pivoted by reader)
 detector = ForecastActualAnomalyDetector(
-    transformer=transformer,
     date_column='date',
     dimension_names=['platform', 'channel'],  # Split metric into these dimensions
     lower_quantile_idx=1,  # q10
@@ -306,28 +308,36 @@ from chronomaly.infrastructure.transformers.filters import (
 )
 from chronomaly.infrastructure.transformers.formatters import ColumnFormatter
 
-# Transformer pipeline
+# Configure transformations at detector level (not workflow level)
+detector = ForecastActualAnomalyDetector(
+    date_column='date',
+    dimension_names=['platform', 'channel'],
+    lower_quantile_idx=1,
+    upper_quantile_idx=9,
+    transformers={
+        'after': [
+            # Filter only significant anomalies
+            CumulativeThresholdFilter('forecast', threshold_pct=0.95),
+            # Filter only anomalies (exclude IN_RANGE)
+            ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER'], mode='include'),
+            # Filter minimum deviation
+            ValueFilter('deviation_pct', min_value=0.05),  # 5% minimum deviation
+            # Percentage formatting using helper method
+            ColumnFormatter.percentage(
+                columns='deviation_pct',
+                decimal_places=1,
+                multiply_by_100=True  # Convert 0.05 → "5.0%"
+            )
+        ]
+    }
+)
+
+# Workflow (transformations are handled by detector)
 workflow = AnomalyDetectionWorkflow(
     forecast_reader=forecast_reader,
     actual_reader=actual_reader,
     anomaly_detector=detector,
-    data_writer=anomaly_writer,
-    transformers={
-        'after_detection': [
-            # Filter only anomalies
-            ValueFilter('status', ['BELOW_LOWER', 'ABOVE_UPPER']),
-            # Percentage formatting using helper method
-            ColumnFormatter.percentage('deviation_pct', decimal_places=1),
-            # Or use custom formatter:
-            # ColumnFormatter({'deviation_pct': lambda x: f"{x:.1f}%"}),
-            # Cumulative threshold (optional)
-            CumulativeThresholdFilter(
-                value_column='actual',
-                threshold=1000,
-                group_by=['platform']
-            )
-        ]
-    }
+    data_writer=anomaly_writer
 )
 
 anomalies_df = workflow.run()
