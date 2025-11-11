@@ -214,6 +214,9 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         }
 
         if date_value is not None:
+            # Convert to date only (remove time component for consistency)
+            if isinstance(date_value, pd.Timestamp):
+                date_value = date_value.date()
             result = {'date': date_value, **result}
 
         return result
