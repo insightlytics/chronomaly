@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 from typing import Optional, List, Dict, Callable
 from .base import AnomalyDetector
-from ..transformers.pivot import PivotTransformer
 
 
 class ForecastActualAnomalyDetector(AnomalyDetector):
@@ -15,10 +14,12 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
     Anomaly detector that compares forecast quantiles with actual values.
 
     This detector focuses SOLELY on anomaly detection. Data transformations
-    (filtering, formatting) should be configured via the transformers parameter.
+    (filtering, formatting, pivoting) should be configured via the transformers parameter.
+
+    Note: The actual_df should be already pivoted before passing to detect() method.
+    Use PivotTransformer outside the detector if needed.
 
     Args:
-        transformer: PivotTransformer instance to pivot actual data
         date_column: Name of the date column (default: 'date')
         exclude_columns: List of columns to exclude from comparison
         dimension_names: List of dimension names to extract from metric
@@ -34,7 +35,6 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
 
     def __init__(
         self,
-        transformer: PivotTransformer,
         date_column: str = 'date',
         exclude_columns: Optional[List[str]] = None,
         dimension_names: Optional[List[str]] = None,
@@ -42,35 +42,12 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
         upper_quantile_idx: int = 9,
         transformers: Optional[Dict[str, List[Callable]]] = None
     ):
-        self.transformer = transformer
         self.date_column = date_column
         self.exclude_columns = exclude_columns or [date_column]
         self.dimension_names = dimension_names
         self.lower_quantile_idx = lower_quantile_idx
         self.upper_quantile_idx = upper_quantile_idx
         self.transformers = transformers or {}
-
-        if dimension_names is not None:
-            self._validate_dimension_names()
-
-    def _validate_dimension_names(self):
-        if not hasattr(self.transformer, 'columns'):
-            return
-
-        transformer_columns = self.transformer.columns
-        if isinstance(transformer_columns, str):
-            transformer_columns = [transformer_columns]
-        else:
-            transformer_columns = list(transformer_columns)
-
-        dimension_names = list(self.dimension_names)
-
-        if dimension_names != transformer_columns:
-            raise ValueError(
-                f"dimension_names must match transformer.columns in the same order.\n"
-                f"  dimension_names: {dimension_names}\n"
-                f"  transformer.columns: {transformer_columns}"
-            )
 
     def _apply_transformers(self, df: pd.DataFrame, stage: str) -> pd.DataFrame:
         """
@@ -130,7 +107,8 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
             raise ValueError("Actual DataFrame is empty")
 
     def _prepare_data(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame):
-        actual_pivot = self.transformer.pivot_table(actual_df).reset_index()
+        # Assume actual_df is already pivoted (use PivotTransformer outside if needed)
+        actual_pivot = actual_df.reset_index() if isinstance(actual_df.index, pd.DatetimeIndex) else actual_df.copy()
         forecast_cols = set(forecast_df.columns) - set(self.exclude_columns)
         actual_cols = set(actual_pivot.columns) - set(self.exclude_columns)
         all_columns = sorted(forecast_cols.union(actual_cols))
