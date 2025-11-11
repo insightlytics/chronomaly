@@ -52,7 +52,7 @@ Time series forecasting and anomaly detection are critical needs in modern data 
 - **Data Transformations**:
   - PivotTransformer: Pivots data into time series format
   - Filters: Value filtering, cumulative threshold filtering
-  - Formatters: Percentage formatting, column formatting
+  - Formatters: Column formatting with built-in percentage helper
 - **Anomaly Detection**: Quantile-based anomaly detection (BELOW_LOWER, IN_RANGE, ABOVE_UPPER)
 - **Modular Architecture**: Each component can be used independently and is easily extensible
 - **Type Safety**: Safe code writing with type hints
@@ -315,8 +315,10 @@ workflow = AnomalyDetectionWorkflow(
         'after_detection': [
             # Filter only anomalies
             ValueFilter('status', ['BELOW_LOWER', 'ABOVE_UPPER']),
-            # Percentage formatting
-            ColumnFormatter('deviation_pct', lambda x: f"{x:.1f}%"),
+            # Percentage formatting using helper method
+            ColumnFormatter.percentage('deviation_pct', decimal_places=1),
+            # Or use custom formatter:
+            # ColumnFormatter({'deviation_pct': lambda x: f"{x:.1f}%"}),
             # Cumulative threshold (optional)
             CumulativeThresholdFilter(
                 value_column='actual',
