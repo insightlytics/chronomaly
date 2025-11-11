@@ -60,22 +60,26 @@ def test_anomaly_detection():
         print("-" * 60)
         print(actual_df.to_string(index=False))
 
-        # Configure transformer
+        # Pivot actual data (transformer moved to component level)
         transformer = PivotTransformer(
             index="date",
             columns=["platform", "channel"],
             values="sessions"
         )
+        actual_df_pivoted = transformer(actual_df)
 
-        # Configure detector
+        print("\n2b. ACTUAL DATA (After pivot):")
+        print("-" * 60)
+        print(actual_df_pivoted.to_string())
+
+        # Configure detector (no transformer parameter)
         detector = ForecastActualComparator(
-            transformer=transformer,
             date_column="date",
             exclude_columns=["date"]
         )
 
-        # Run detection
-        results = detector.detect(forecast_df, actual_df)
+        # Run detection with pivoted actual data
+        results = detector.detect(forecast_df, actual_df_pivoted)
 
         print("\n3. ANOMALY DETECTION RESULTS:")
         print("-" * 60)
@@ -130,28 +134,35 @@ def test_with_filter():
         # Create sample data
         forecast_df, actual_df = create_sample_data()
 
-        # Configure transformer and detector
+        # Pivot actual data (transformer moved to component level)
         transformer = PivotTransformer(
             index="date",
             columns=["platform", "channel"],
             values="sessions"
         )
+        actual_df_pivoted = transformer(actual_df)
+
+        # Configure detector with filters (no transformer parameter)
+        from chronomaly.infrastructure.transformers.filters import ValueFilter
 
         detector = ForecastActualComparator(
-            transformer=transformer,
-            date_column="date"
+            date_column="date",
+            transformers={
+                'after': [
+                    ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER'], mode='include'),
+                    ValueFilter('deviation_pct', min_value=0.05)  # 5% minimum
+                ]
+            }
         )
 
         print("\n" + "=" * 60)
         print("FILTERED DETECTION TEST")
         print("=" * 60)
 
-        # Run filtered detection (only significant deviations > 5%)
-        filtered_results = detector.detect_with_filter(
+        # Run detection with pivoted actual data
+        filtered_results = detector.detect(
             forecast_df=forecast_df,
-            actual_df=actual_df,
-            min_deviation_pct=5.0,
-            exclude_no_forecast=True
+            actual_df=actual_df_pivoted
         )
 
         print("\nFiltered results (deviation > 5%):")

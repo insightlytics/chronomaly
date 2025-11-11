@@ -3,12 +3,13 @@ BigQuery data writer implementation.
 """
 
 import pandas as pd
-from typing import Optional
+from typing import Optional, Dict, List, Callable
 from google.cloud import bigquery
 from ..base import DataWriter
+from chronomaly.shared import TransformableMixin
 
 
-class BigQueryDataWriter(DataWriter):
+class BigQueryDataWriter(DataWriter, TransformableMixin):
     """
     Data writer implementation for Google BigQuery.
 
@@ -21,6 +22,8 @@ class BigQueryDataWriter(DataWriter):
                            (default: CREATE_IF_NEEDED)
         write_disposition: Specifies behavior if table exists
                           (default: WRITE_TRUNCATE - replaces existing data)
+        transformers: Optional dict of transformer lists to apply before/after writing
+                     Example: {'before': [Filter1(), Filter2()]}
     """
 
     # Valid disposition values
@@ -34,7 +37,8 @@ class BigQueryDataWriter(DataWriter):
         dataset: str = None,
         table: str = None,
         create_disposition: str = 'CREATE_IF_NEEDED',
-        write_disposition: str = 'WRITE_TRUNCATE'
+        write_disposition: str = 'WRITE_TRUNCATE',
+        transformers: Optional[Dict[str, List[Callable]]] = None
     ):
         if dataset is None:
             raise ValueError("dataset parameter is required")
@@ -60,6 +64,7 @@ class BigQueryDataWriter(DataWriter):
         self.create_disposition = create_disposition
         self.write_disposition = write_disposition
         self._client = None
+        self.transformers = transformers or {}
 
     def _get_client(self) -> bigquery.Client:
         """
@@ -78,6 +83,7 @@ class BigQueryDataWriter(DataWriter):
                 self._client = bigquery.Client(project=self.project)
         return self._client
 
+
     def write(self, dataframe: pd.DataFrame) -> None:
         """
         Write forecast results to BigQuery table.
@@ -88,6 +94,9 @@ class BigQueryDataWriter(DataWriter):
         Raises:
             RuntimeError: If the BigQuery write job fails
         """
+        # Apply transformers before writing data
+        dataframe = self._apply_transformers(dataframe, 'before')
+
         client = self._get_client()
 
         # Construct table ID (modern API - replaces deprecated dataset().table())

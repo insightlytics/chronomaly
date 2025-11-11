@@ -6,11 +6,12 @@ import pandas as pd
 import sqlite3
 import os
 import re
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Callable
 from ..base import DataReader
+from chronomaly.shared import TransformableMixin
 
 
-class SQLiteDataReader(DataReader):
+class SQLiteDataReader(DataReader, TransformableMixin):
     """
     Data reader implementation for SQLite databases.
 
@@ -18,6 +19,9 @@ class SQLiteDataReader(DataReader):
         database_path: Path to the SQLite database file
         query: SQL query to execute
         date_column: Name of the date column (will be parsed as datetime)
+        transformers: Optional dict of transformer lists to apply after loading data
+                     Example: {'after': [Filter1(), Filter2()]}
+                     Note: 'before' stage not supported for readers
         **kwargs: Additional arguments to pass to pandas.read_sql_query()
 
     Security Notes:
@@ -33,6 +37,7 @@ class SQLiteDataReader(DataReader):
         database_path: str,
         query: str,
         date_column: Optional[str] = None,
+        transformers: Optional[Dict[str, List[Callable]]] = None,
         **kwargs: Any
     ):
         # BUG-19 FIX: Validate database path to prevent path traversal
@@ -64,6 +69,7 @@ class SQLiteDataReader(DataReader):
         self.query = query
 
         self.date_column = date_column
+        self.transformers = transformers or {}
         self.read_sql_kwargs = kwargs
 
     def _validate_query(self, query: str) -> None:
@@ -126,6 +132,9 @@ class SQLiteDataReader(DataReader):
                         f"Available columns: {list(df.columns)}"
                     )
                 df[self.date_column] = pd.to_datetime(df[self.date_column])
+
+            # Apply transformers after loading data
+            df = self._apply_transformers(df, 'after')
 
             return df
         finally:

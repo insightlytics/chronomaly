@@ -5,8 +5,9 @@ TimesFM forecaster implementation.
 import pandas as pd
 import numpy as np
 import torch
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Callable
 from .base import Forecaster
+from chronomaly.shared import TransformableMixin
 
 try:
     import timesfm
@@ -17,7 +18,7 @@ except ImportError:
     )
 
 
-class TimesFMForecaster(Forecaster):
+class TimesFMForecaster(Forecaster, TransformableMixin):
     """
     Forecaster implementation using Google's TimesFM model.
 
@@ -35,6 +36,8 @@ class TimesFMForecaster(Forecaster):
         fix_quantile_crossing: Fix quantile crossing (default: True)
         frequency: Pandas frequency string for forecast dates (default: 'D' for daily)
                   Common values: 'D' (daily), 'H' (hourly), 'W' (weekly), 'M' (monthly)
+        transformers: Optional dict of transformer lists to apply before/after forecasting
+                     Example: {'before': [Filter1()], 'after': [Filter2()]}
         **kwargs: Additional configuration parameters
     """
 
@@ -49,11 +52,13 @@ class TimesFMForecaster(Forecaster):
         infer_is_positive: bool = True,
         fix_quantile_crossing: bool = True,
         frequency: str = 'D',
+        transformers: Optional[Dict[str, List[Callable]]] = None,
         **kwargs: Any
     ):
         self.model_name = model_name
         self.max_horizon = max_horizon  # Store for validation
         self.frequency = frequency  # BUG-34 FIX: Make frequency configurable
+        self.transformers = transformers or {}
         self.config = timesfm.ForecastConfig(
             max_context=max_context,
             max_horizon=max_horizon,
@@ -82,6 +87,7 @@ class TimesFMForecaster(Forecaster):
             self._model.compile(self.config)
 
         return self._model
+
 
     def forecast(
         self,
@@ -130,6 +136,9 @@ class TimesFMForecaster(Forecaster):
                 f"Please reduce horizon or increase max_horizon in forecaster configuration."
             )
 
+        # Apply transformers before forecasting (on input data)
+        dataframe = self._apply_transformers(dataframe, 'before')
+
         model = self._get_model()
 
         # Prepare inputs - each column is a separate time series
@@ -148,14 +157,19 @@ class TimesFMForecaster(Forecaster):
 
         if return_point:
             # Return point forecasts
-            return self._format_point_forecast(
+            forecast_df = self._format_point_forecast(
                 forecast_point, dataframe, horizon
             )
         else:
             # Return quantile forecasts (default)
-            return self._format_quantile_forecast(
+            forecast_df = self._format_quantile_forecast(
                 forecast_quantile, dataframe, horizon
             )
+
+        # Apply transformers after forecasting
+        forecast_df = self._apply_transformers(forecast_df, 'after')
+
+        return forecast_df
 
     def _get_last_date(self, dataframe: pd.DataFrame) -> pd.Timestamp:
         """

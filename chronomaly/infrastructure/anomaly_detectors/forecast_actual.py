@@ -5,27 +5,30 @@ Forecast vs Actual anomaly detection implementation.
 import warnings
 import pandas as pd
 import numpy as np
-from typing import Optional, List
+from typing import Optional, List, Dict, Callable
 from .base import AnomalyDetector
-from ..transformers.pivot import PivotTransformer
+from chronomaly.shared import TransformableMixin
 
 
-class ForecastActualAnomalyDetector(AnomalyDetector):
+class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
     """
     Anomaly detector that compares forecast quantiles with actual values.
 
-    This detector focuses SOLELY on anomaly detection. It does NOT include:
-    - Pre-filtering (use PreFilter classes)
-    - Post-filtering (use PostFilter classes)
-    - Result formatting (use PostFilter classes)
+    This detector focuses SOLELY on anomaly detection. Data transformations
+    (filtering, formatting, pivoting) should be configured via the transformers parameter.
+
+    Note: The actual_df should be already pivoted before passing to detect() method.
+    Use PivotTransformer outside the detector if needed.
 
     Args:
-        transformer: PivotTransformer instance to pivot actual data
         date_column: Name of the date column (default: 'date')
         exclude_columns: List of columns to exclude from comparison
         dimension_names: List of dimension names to extract from metric
         lower_quantile_idx: Index of lower confidence bound (default: 1 for q10)
         upper_quantile_idx: Index of upper confidence bound (default: 9 for q90)
+        transformers: Optional dict of transformer lists to apply after detection
+                     Example: {'after': [Filter1(), Filter2()]}
+                     Note: 'before' stage not supported for detectors
     """
 
     QUANTILE_POINT_IDX = 0
@@ -33,41 +36,20 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
 
     def __init__(
         self,
-        transformer: PivotTransformer,
         date_column: str = 'date',
         exclude_columns: Optional[List[str]] = None,
         dimension_names: Optional[List[str]] = None,
         lower_quantile_idx: int = 1,
-        upper_quantile_idx: int = 9
+        upper_quantile_idx: int = 9,
+        transformers: Optional[Dict[str, List[Callable]]] = None
     ):
-        self.transformer = transformer
         self.date_column = date_column
         self.exclude_columns = exclude_columns or [date_column]
         self.dimension_names = dimension_names
         self.lower_quantile_idx = lower_quantile_idx
         self.upper_quantile_idx = upper_quantile_idx
+        self.transformers = transformers or {}
 
-        if dimension_names is not None:
-            self._validate_dimension_names()
-
-    def _validate_dimension_names(self):
-        if not hasattr(self.transformer, 'columns'):
-            return
-
-        transformer_columns = self.transformer.columns
-        if isinstance(transformer_columns, str):
-            transformer_columns = [transformer_columns]
-        else:
-            transformer_columns = list(transformer_columns)
-
-        dimension_names = list(self.dimension_names)
-
-        if dimension_names != transformer_columns:
-            raise ValueError(
-                f"dimension_names must match transformer.columns in the same order.\n"
-                f"  dimension_names: {dimension_names}\n"
-                f"  transformer.columns: {transformer_columns}"
-            )
 
     def detect(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame) -> pd.DataFrame:
         """Detect anomalies by comparing forecast quantiles with actual values."""
@@ -83,9 +65,23 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
         if self.dimension_names:
             result_df = self._split_metric_to_dimensions(result_df)
 
+        # Apply transformers after detection
+        result_df = self._apply_transformers(result_df, 'after')
+
         return result_df
 
     def _validate_inputs(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame):
+        """
+        Validate input DataFrames.
+
+        Args:
+            forecast_df: Forecast data (pivoted format)
+            actual_df: Actual data (must be pivoted format)
+
+        Raises:
+            TypeError: If inputs are not DataFrames
+            ValueError: If DataFrames are empty or actual_df is not pivoted
+        """
         if not isinstance(forecast_df, pd.DataFrame):
             raise TypeError(f"Expected DataFrame for forecast_df, got {type(forecast_df).__name__}")
         if not isinstance(actual_df, pd.DataFrame):
@@ -95,8 +91,47 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
         if actual_df.empty:
             raise ValueError("Actual DataFrame is empty")
 
+        # Validate that actual_df is in pivoted format
+        self._validate_pivoted_format(actual_df)
+
+    def _validate_pivoted_format(self, df: pd.DataFrame) -> None:
+        """
+        Validate that DataFrame is in pivoted (wide) format, not long format.
+
+        Pivoted format characteristics:
+        - Has date column + multiple metric columns
+        - Metric columns contain numeric values
+        - NOT long format (date, metric_name, value columns)
+
+        Args:
+            df: DataFrame to validate
+
+        Raises:
+            ValueError: If DataFrame appears to be in long format instead of pivoted
+        """
+        # Check for common long-format column names
+        long_format_indicators = ['metric', 'metric_name', 'value', 'values', 'measure']
+        df_columns_lower = [col.lower() for col in df.columns]
+
+        for indicator in long_format_indicators:
+            if indicator in df_columns_lower:
+                raise ValueError(
+                    f"actual_df appears to be in long format (contains '{indicator}' column). "
+                    f"Please pivot the data using PivotTransformer before passing to detect(). "
+                    f"Example: actual_df_pivoted = PivotTransformer(...)(actual_df)"
+                )
+
+        # Check that we have more than just the date column
+        non_date_columns = [col for col in df.columns if col not in self.exclude_columns]
+        if len(non_date_columns) == 0:
+            raise ValueError(
+                "actual_df has no metric columns (only date column found). "
+                "Please ensure data is pivoted with metric columns."
+            )
+
     def _prepare_data(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame):
-        actual_pivot = self.transformer.pivot_table(actual_df).reset_index()
+        # Assume actual_df is already pivoted (use PivotTransformer outside if needed)
+        actual_pivot = actual_df.reset_index() if isinstance(actual_df.index, pd.DatetimeIndex) else actual_df.copy()
         forecast_cols = set(forecast_df.columns) - set(self.exclude_columns)
         actual_cols = set(actual_pivot.columns) - set(self.exclude_columns)
         all_columns = sorted(forecast_cols.union(actual_cols))
@@ -179,6 +214,9 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
         }
 
         if date_value is not None:
+            # Convert to date only (remove time component for consistency)
+            if isinstance(date_value, pd.Timestamp):
+                date_value = date_value.date()
             result = {'date': date_value, **result}
 
         return result

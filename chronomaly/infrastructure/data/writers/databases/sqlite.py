@@ -6,11 +6,12 @@ import pandas as pd
 import sqlite3
 import os
 import re
-from typing import Optional
+from typing import Optional, Dict, List, Callable
 from ..base import DataWriter
+from chronomaly.shared import TransformableMixin
 
 
-class SQLiteDataWriter(DataWriter):
+class SQLiteDataWriter(DataWriter, TransformableMixin):
     """
     Data writer implementation for SQLite databases.
 
@@ -19,6 +20,8 @@ class SQLiteDataWriter(DataWriter):
         table_name: Name of the table to write to
         if_exists: How to behave if table exists {'fail', 'replace', 'append'}
                    (default: 'replace')
+        transformers: Optional dict of transformer lists to apply before/after writing
+                     Example: {'before': [Filter1(), Filter2()]}
         **kwargs: Additional arguments to pass to pandas.to_sql()
 
     Security Notes:
@@ -32,6 +35,7 @@ class SQLiteDataWriter(DataWriter):
         database_path: str,
         table_name: str,
         if_exists: str = 'replace',
+        transformers: Optional[Dict[str, List[Callable]]] = None,
         **kwargs
     ):
         # BUG-20 FIX: Validate database path to prevent path traversal
@@ -85,7 +89,9 @@ class SQLiteDataWriter(DataWriter):
             )
 
         self.if_exists = if_exists
+        self.transformers = transformers or {}
         self.to_sql_kwargs = kwargs
+
 
     def write(self, dataframe: pd.DataFrame) -> None:
         """
@@ -98,6 +104,9 @@ class SQLiteDataWriter(DataWriter):
             ValueError: If dataframe is empty or invalid
             RuntimeError: If database write operation fails
         """
+        # Apply transformers before writing data
+        dataframe = self._apply_transformers(dataframe, 'before')
+
         # BUG-44 FIX: Validate dataframe type
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError(

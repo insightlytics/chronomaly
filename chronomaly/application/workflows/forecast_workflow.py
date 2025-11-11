@@ -4,9 +4,7 @@ Main forecast workflow orchestrator.
 
 import pandas as pd
 import inspect
-from typing import Optional
 from ...infrastructure.data.readers.base import DataReader
-from ...infrastructure.transformers.pivot import PivotTransformer
 from ...infrastructure.forecasters.base import Forecaster
 from ...infrastructure.data.writers.base import DataWriter
 
@@ -16,29 +14,72 @@ class ForecastWorkflow:
     Main orchestrator class for the forecast workflow.
 
     This class coordinates the entire forecasting workflow:
-    1. Load data from source
-    2. Transform data (pivot if needed)
-    3. Generate forecast
-    4. Write results to output
+    1. Load data from source (via data_reader)
+    2. Generate forecast (via forecaster)
+    3. Write results to output (via data_writer)
+
+    All data transformations (pivot, filtering, formatting) should be configured
+    at the component level using the transformers parameter.
 
     Args:
         data_reader: Data reader instance (CSV, SQLite, BigQuery, etc.)
         forecaster: Forecaster instance (TimesFM, etc.)
         data_writer: Data writer instance (SQLite, BigQuery, etc.)
-        transformer: Optional data transformer for pivot operations
+
+    Example:
+        from chronomaly.infrastructure.transformers.pivot import PivotTransformer
+        from chronomaly.infrastructure.transformers.filters import ValueFilter
+        from chronomaly.infrastructure.transformers.formatters import ColumnFormatter
+
+        # Reader with pivot transformation
+        reader = BigQueryDataReader(
+            ...,
+            transformers={
+                'after': [
+                    PivotTransformer(
+                        index=['date'],
+                        columns=['platform', 'channel'],
+                        values='sessions'
+                    )
+                ]
+            }
+        )
+
+        # Forecaster with input/output transformations
+        forecaster = TimesFMForecaster(
+            ...,
+            transformers={
+                'before': [ValueFilter('outliers', max_value=1000, mode='exclude')],
+                'after': [ValueFilter('confidence', min_value=0.8, mode='include')]
+            }
+        )
+
+        # Writer with pre-write transformations
+        writer = BigQueryDataWriter(
+            ...,
+            transformers={
+                'before': [
+                    ColumnFormatter({'forecast': lambda x: round(x, 2)})
+                ]
+            }
+        )
+
+        workflow = ForecastWorkflow(
+            data_reader=reader,
+            forecaster=forecaster,
+            data_writer=writer
+        )
     """
 
     def __init__(
         self,
         data_reader: DataReader,
         forecaster: Forecaster,
-        data_writer: DataWriter,
-        transformer: Optional[PivotTransformer] = None
+        data_writer: DataWriter
     ):
         self.data_reader = data_reader
         self.forecaster = forecaster
         self.data_writer = data_writer
-        self.transformer = transformer
 
     def run(
         self,
@@ -65,7 +106,7 @@ class ForecastWorkflow:
                 f"horizon must be a positive integer, got: {horizon} (type: {type(horizon).__name__})"
             )
 
-        # Step 1: Load data
+        # Step 1: Load data (transformations handled by reader)
         df = self.data_reader.load()
 
         # Validate loaded data (BUG-012 fix)
@@ -74,16 +115,7 @@ class ForecastWorkflow:
                 "Data reader returned empty dataset. Cannot proceed with forecast."
             )
 
-        # Step 2: Transform data (if transformer is provided)
-        if self.transformer is not None:
-            df = self.transformer.pivot_table(df)
-            # Validate transformed data
-            if df.empty:
-                raise ValueError(
-                    "Transformer returned empty dataset. Check your transformation configuration."
-                )
-
-        # Step 3: Generate forecast
+        # Step 2: Generate forecast
         # Check if forecaster supports return_point parameter using inspect (BUG-010 fix)
         sig = inspect.signature(self.forecaster.forecast)
         supports_return_point = 'return_point' in sig.parameters
@@ -132,7 +164,7 @@ class ForecastWorkflow:
                 f"horizon must be a positive integer, got: {horizon} (type: {type(horizon).__name__})"
             )
 
-        # Step 1: Load data
+        # Step 1: Load data (transformations handled by reader)
         df = self.data_reader.load()
 
         # Validate loaded data
@@ -141,16 +173,7 @@ class ForecastWorkflow:
                 "Data reader returned empty dataset. Cannot proceed with forecast."
             )
 
-        # Step 2: Transform data (if transformer is provided)
-        if self.transformer is not None:
-            df = self.transformer.pivot_table(df)
-            # Validate transformed data
-            if df.empty:
-                raise ValueError(
-                    "Transformer returned empty dataset. Check your transformation configuration."
-                )
-
-        # Step 3: Generate forecast
+        # Step 2: Generate forecast
         # Check if forecaster supports return_point parameter using inspect
         sig = inspect.signature(self.forecaster.forecast)
         supports_return_point = 'return_point' in sig.parameters

@@ -4,17 +4,21 @@ CSV data reader implementation.
 
 import pandas as pd
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Callable
 from ..base import DataReader
+from chronomaly.shared import TransformableMixin
 
 
-class CSVDataReader(DataReader):
+class CSVDataReader(DataReader, TransformableMixin):
     """
     Data reader implementation for CSV files.
 
     Args:
         file_path: Path to the CSV file
         date_column: Name of the date column (will be parsed as datetime)
+        transformers: Optional dict of transformer lists to apply after loading data
+                     Example: {'after': [Filter1(), Filter2()]}
+                     Note: 'before' stage not supported for readers
         **kwargs: Additional arguments to pass to pandas.read_csv()
 
     Security Notes:
@@ -26,6 +30,7 @@ class CSVDataReader(DataReader):
         self,
         file_path: str,
         date_column: Optional[str] = None,
+        transformers: Optional[Dict[str, List[Callable]]] = None,
         **kwargs: Any
     ):
         # BUG-17 FIX: Validate file path to prevent path traversal
@@ -49,6 +54,7 @@ class CSVDataReader(DataReader):
 
         self.file_path = abs_path
         self.date_column = date_column
+        self.transformers = transformers or {}
         self.read_csv_kwargs = kwargs
 
     def load(self) -> pd.DataFrame:
@@ -87,5 +93,8 @@ class CSVDataReader(DataReader):
                 raise ValueError(
                     f"Failed to parse date_column '{self.date_column}' as datetime: {str(e)}"
                 ) from e
+
+        # Apply transformers after loading data
+        df = self._apply_transformers(df, 'after')
 
         return df
