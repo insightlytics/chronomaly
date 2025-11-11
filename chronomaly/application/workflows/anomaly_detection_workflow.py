@@ -26,7 +26,7 @@ class AnomalyDetectionWorkflow:
         forecast_reader: Data reader for forecast data
         actual_reader: Data reader for actual data
         anomaly_detector: Anomaly detector instance
-        data_writer: Data writer for results
+        data_writer: Data writer for results (optional, if not provided results won't be written)
         transformers: Dict of transformer lists for different stages
 
     Transformer Stages:
@@ -70,7 +70,7 @@ class AnomalyDetectionWorkflow:
         forecast_reader: DataReader,
         actual_reader: DataReader,
         anomaly_detector: AnomalyDetector,
-        data_writer: DataWriter,
+        data_writer: Optional[DataWriter] = None,
         transformers: Optional[Dict[str, List[Callable]]] = None
     ):
         self.forecast_reader = forecast_reader
@@ -176,19 +176,6 @@ class AnomalyDetectionWorkflow:
             ValueError: If loaded data is empty or incompatible
         """
         anomaly_df = self._execute_detection()
-        self.data_writer.write(anomaly_df)
+        if self.data_writer:
+            self.data_writer.write(anomaly_df)
         return anomaly_df
-
-    def run_without_output(self) -> pd.DataFrame:
-        """
-        Execute anomaly detection workflow without writing to output.
-
-        Useful for testing or when you want to inspect results before writing.
-
-        Returns:
-            pd.DataFrame: The anomaly detection results
-
-        Raises:
-            ValueError: If loaded data is empty or incompatible
-        """
-        return self._execute_detection()

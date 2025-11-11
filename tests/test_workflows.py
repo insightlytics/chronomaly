@@ -195,7 +195,7 @@ class TestAnomalyDetectionWorkflow:
             workflow.run()
 
     def test_run_without_output(self):
-        """Test run_without_output method."""
+        """Test running workflow without data_writer."""
         mock_forecast_reader = Mock()
         mock_forecast_reader.load.return_value = pd.DataFrame({
             'date': ['2024-01-01'],
@@ -216,21 +216,18 @@ class TestAnomalyDetectionWorkflow:
             'status': ['IN_RANGE']
         })
 
-        mock_writer = Mock()
-
         workflow = AnomalyDetectionWorkflow(
             forecast_reader=mock_forecast_reader,
             actual_reader=mock_actual_reader,
             anomaly_detector=mock_detector,
-            data_writer=mock_writer
+            data_writer=None
         )
 
-        # Execute without writing
-        result = workflow.run_without_output()
+        # Execute without writing (data_writer is None)
+        result = workflow.run()
 
-        # Verify writer was NOT called
+        # Verify result is returned
         assert result is not None
-        mock_writer.write.assert_not_called()
 
     def test_transformer_with_format_method(self):
         """Test that transformers with .format() method work correctly."""
