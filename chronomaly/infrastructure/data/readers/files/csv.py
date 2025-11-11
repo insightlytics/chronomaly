@@ -4,7 +4,7 @@ CSV data reader implementation.
 
 import pandas as pd
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Callable
 from ..base import DataReader
 
 
@@ -15,6 +15,9 @@ class CSVDataReader(DataReader):
     Args:
         file_path: Path to the CSV file
         date_column: Name of the date column (will be parsed as datetime)
+        transformers: Optional dict of transformer lists to apply after loading data
+                     Example: {'after': [Filter1(), Filter2()]}
+                     Note: 'before' stage not supported for readers
         **kwargs: Additional arguments to pass to pandas.read_csv()
 
     Security Notes:
@@ -26,6 +29,7 @@ class CSVDataReader(DataReader):
         self,
         file_path: str,
         date_column: Optional[str] = None,
+        transformers: Optional[Dict[str, List[Callable]]] = None,
         **kwargs: Any
     ):
         # BUG-17 FIX: Validate file path to prevent path traversal
@@ -49,7 +53,36 @@ class CSVDataReader(DataReader):
 
         self.file_path = abs_path
         self.date_column = date_column
+        self.transformers = transformers or {}
         self.read_csv_kwargs = kwargs
+
+    def _apply_transformers(self, df: pd.DataFrame, stage: str) -> pd.DataFrame:
+        """
+        Apply transformers for a specific stage.
+
+        Args:
+            df: DataFrame to transform
+            stage: Stage name ('after')
+
+        Returns:
+            pd.DataFrame: Transformed DataFrame
+        """
+        if stage not in self.transformers:
+            return df
+
+        result = df
+        for transformer in self.transformers[stage]:
+            # Support both .filter() and .format() methods
+            if hasattr(transformer, 'filter'):
+                result = transformer.filter(result)
+            elif hasattr(transformer, 'format'):
+                result = transformer.format(result)
+            elif callable(transformer):
+                result = transformer(result)
+            else:
+                raise TypeError(f"Transformer must have .filter(), .format() method or be callable")
+
+        return result
 
     def load(self) -> pd.DataFrame:
         """
@@ -87,5 +120,8 @@ class CSVDataReader(DataReader):
                 raise ValueError(
                     f"Failed to parse date_column '{self.date_column}' as datetime: {str(e)}"
                 ) from e
+
+        # Apply transformers after loading data
+        df = self._apply_transformers(df, 'after')
 
         return df
