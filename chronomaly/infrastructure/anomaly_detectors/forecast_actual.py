@@ -165,10 +165,10 @@ class ForecastActualAnomalyDetector(AnomalyDetector):
         else:
             if actual < lower_bound:
                 status = 'BELOW_LOWER'
-                deviation_pct = ((lower_bound - actual) / lower_bound * 100) if lower_bound != 0 else (abs(actual) * 100 if actual != 0 else 0.0)
+                deviation_pct = ((lower_bound - actual) / lower_bound) if lower_bound != 0 else (abs(actual) if actual != 0 else 0.0)
             elif actual > upper_bound:
                 status = 'ABOVE_UPPER'
-                deviation_pct = ((actual - upper_bound) / upper_bound * 100) if upper_bound != 0 else (abs(actual) * 100 if actual != 0 else 0.0)
+                deviation_pct = ((actual - upper_bound) / upper_bound) if upper_bound != 0 else (abs(actual) if actual != 0 else 0.0)
 
         result = {
             'metric': column,

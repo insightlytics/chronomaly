@@ -73,10 +73,10 @@ class CumulativeThresholdFilter(DataFrameFilter):
         cumulative_pct = cumulative_sum / total_value
 
         # Find minimum threshold value
-        threshold_mask = cumulative_pct <= self.threshold_pct
+        threshold_mask = cumulative_pct >= self.threshold_pct
         if threshold_mask.any():
-            threshold_idx = threshold_mask.idxmax()
-            min_threshold = sorted_values.loc[:threshold_idx].min()
+            first_exceed_idx = threshold_mask.idxmax()  # İlk True = ilk kez aştığı nokta
+            min_threshold = sorted_values.loc[:first_exceed_idx].min()
         else:
             min_threshold = sorted_values.min()
 
