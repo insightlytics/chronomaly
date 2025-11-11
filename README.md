@@ -43,7 +43,8 @@ Time series forecasting and anomaly detection are critical needs in modern data 
 
 - **Google TimesFM Integration**: State-of-the-art time series forecasting model support
 - **Multiple Data Sources**:
-  - BigQuery, SQLite, CSV read/write
+  - Readers: CSV, SQLite, BigQuery
+  - Writers: SQLite, BigQuery
   - API reader support (extensible)
 - **Flexible Workflow Orchestration**:
   - ForecastWorkflow: Data reading, transformation, forecasting, writing
@@ -93,6 +94,47 @@ pip install -e ".[dev]"
 
 # All optional dependencies
 pip install -e ".[all]"
+```
+
+---
+
+## Quick Start
+
+Here's a simple forecasting example:
+
+```python
+import pandas as pd
+from chronomaly.application.workflows import ForecastWorkflow
+from chronomaly.infrastructure.data.readers.files import CSVDataReader
+from chronomaly.infrastructure.data.writers.databases import SQLiteDataWriter
+from chronomaly.infrastructure.forecasters import TimesFMForecaster
+
+# Create data reader and writer
+reader = CSVDataReader(
+    file_path="data/historical_data.csv",
+    date_column="date"
+)
+writer = SQLiteDataWriter(
+    db_path="output/forecasts.db",
+    table_name="forecasts"
+)
+
+# Create forecaster
+forecaster = TimesFMForecaster(
+    model_name='google/timesfm-2.5-200m-pytorch',
+    frequency='D'  # Daily forecast
+)
+
+# Run the workflow
+workflow = ForecastWorkflow(
+    data_reader=reader,
+    forecaster=forecaster,
+    data_writer=writer
+)
+
+# Generate 30-day forecast
+forecast_df = workflow.run(horizon=30)
+print(forecast_df.head())
 ```
 
 ---
@@ -296,14 +338,14 @@ Chronomaly supports various data sources:
 
 ```python
 from chronomaly.infrastructure.data.readers.files import CSVDataReader
-from chronomaly.infrastructure.data.writers.files import CSVDataWriter
 
+# CSV reader (for reading data)
 reader = CSVDataReader(
     file_path="data/input.csv",
     date_column="date"
 )
 
-writer = CSVDataWriter(file_path="output/results.csv")
+# Note: CSV writer is not yet implemented. Use SQLite or BigQuery writers for output.
 ```
 
 #### SQLite
@@ -387,7 +429,7 @@ chronomaly/
 - **AnomalyDetectors**: Anomaly detection algorithms (ForecastActualAnomalyDetector)
 - **Transformers**: Data transformations (PivotTransformer, Filters, Formatters)
 - **DataReaders**: Data reading (CSV, SQLite, BigQuery)
-- **DataWriters**: Data writing (CSV, SQLite, BigQuery)
+- **DataWriters**: Data writing (SQLite, BigQuery)
 
 ---
 
