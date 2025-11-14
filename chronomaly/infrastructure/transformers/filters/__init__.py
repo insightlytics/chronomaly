@@ -11,10 +11,12 @@ Filters can be applied at ANY stage of the pipeline:
 
 from .base import DataFrameFilter
 from .cumulative_threshold import CumulativeThresholdFilter
+from .date_range_filter import DateRangeFilter
 from .value_filter import ValueFilter
 
 __all__ = [
     'DataFrameFilter',
     'CumulativeThresholdFilter',
+    'DateRangeFilter',
     'ValueFilter'
 ]
