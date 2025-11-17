@@ -28,7 +28,6 @@ classifiers = [
 dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.24.0",
-    "torch>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -37,7 +36,9 @@ bigquery = [
     "db-dtypes>=1.1.0",
 ]
 # TimesFM backend options (install TimesFM from GitHub first: pip install git+https://github.com/google-research/timesfm.git)
-# torch backend is already included in base dependencies
+torch = [
+    "torch>=2.0.0",
+]
 flax = [
     "flax",
     "optax",
@@ -56,11 +57,7 @@ dev = [
     "flake8>=6.0.0",
 ]
 all = [
-    "google-cloud-bigquery>=3.10.0",
-    "db-dtypes>=1.1.0",
-    "pytest>=7.4.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
+    "chronomaly[bigquery,torch,dev]",
 ]
 
 [project.urls]
