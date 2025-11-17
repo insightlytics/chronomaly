@@ -106,6 +106,9 @@ class DateRangeFilter(DataFrameFilter):
 
             if self.end_date is not None:
                 result = result[date_series <= self.end_date]
+
+            # Reset index after filtering to ensure consistent indexing
+            result = result.reset_index(drop=True)
         else:
             # Use index
             if not isinstance(result.index, pd.DatetimeIndex):
