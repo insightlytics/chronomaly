@@ -16,6 +16,7 @@ class EmailNotifier(Notifier, TransformableMixin):
     Email notifier for sending anomaly alerts via SMTP.
 
     Sends HTML-formatted emails with anomaly data presented as a styled table.
+    Optionally includes line charts for anomalous metrics when chart_data_reader is provided.
     Supports multiple recipients and filtering via transformers.
 
     SMTP credentials and email subject are configured within the code.
@@ -24,10 +25,16 @@ class EmailNotifier(Notifier, TransformableMixin):
         to: Recipient email address(es). Can be a single email or list of emails.
         transformers: Optional transformers to apply before notification
                      Example: {'before': [ValueFilter(...)]} to filter anomalies
+        chart_data_reader: Optional DataReader for loading historical time series data.
+                          Metric names from anomalies must match column names in the chart data.
+                          Charts are generated as line plots and embedded in the email.
 
     Example:
         from chronomaly.infrastructure.notifiers import EmailNotifier
         from chronomaly.infrastructure.transformers.filters import ValueFilter
+        from chronomaly.infrastructure.transformers.formatters import ColumnSelector
+        from chronomaly.infrastructure.data.readers import BigQueryDataReader
+        from chronomaly.infrastructure.transformers import PivotTransformer
 
         # Basic usage
         notifier = EmailNotifier(
@@ -45,6 +52,39 @@ class EmailNotifier(Notifier, TransformableMixin):
             }
         )
 
+        # With charts - show historical trends for anomalous metrics
+        chart_reader = BigQueryDataReader(
+            service_account_file="/path/to/service-account.json",
+            project="my-project",
+            query=\"\"\"
+                SELECT date, platform, channel, metric_name, SUM(value) AS value
+                FROM `my-project.dataset.table_*`
+                WHERE _TABLE_SUFFIX BETWEEN '20251020' AND '20251116'
+                GROUP BY date, platform, channel, metric_name
+                ORDER BY date
+            \"\"\",
+            date_column="date",
+            transformers={
+                'after': [
+                    PivotTransformer(
+                        index=['date'],
+                        columns=['platform', 'channel', 'metric_name'],
+                        values='value'
+                    )
+                ]
+            }
+        )
+
+        notifier = EmailNotifier(
+            to=["team@example.com"],
+            transformers={
+                'before': [
+                    ColumnSelector(['date', 'metric'], mode='drop')
+                ]
+            },
+            chart_data_reader=chart_reader
+        )
+
         # Send notification
         payload = {'anomalies': anomalies_df}
         notifier.notify(payload)
@@ -52,12 +92,16 @@ class EmailNotifier(Notifier, TransformableMixin):
     Note:
         SMTP configuration and email subject are hardcoded in the class.
         Update _get_smtp_config() and _get_email_subject() methods to change settings.
+
+        For charts to work correctly, metric names in anomalies_df['metric'] must
+        exactly match column names in the pivoted chart data.
     """
 
     def __init__(
         self,
         to: List[str] | str,
-        transformers: Optional[Dict[str, List[Callable]]] = None
+        transformers: Optional[Dict[str, List[Callable]]] = None,
+        chart_data_reader: Optional[Any] = None
     ):
         # Validate and normalize recipients
         if isinstance(to, str):
@@ -72,6 +116,7 @@ class EmailNotifier(Notifier, TransformableMixin):
             raise TypeError("'to' must be a string or list of strings")
 
         self.transformers = transformers or {}
+        self.chart_data_reader = chart_data_reader
 
         # Get SMTP configuration from internal method
         smtp_config = self._get_smtp_config()
@@ -125,6 +170,92 @@ class EmailNotifier(Notifier, TransformableMixin):
         """
         return "Anomaly Detection Alert"
 
+    def _create_line_chart(self, metric_name: str, data: pd.Series) -> str:
+        """
+        Create a line chart for a single metric and return as base64 string.
+
+        Args:
+            metric_name: Name of the metric
+            data: Time series data (Series with DatetimeIndex)
+
+        Returns:
+            str: Base64-encoded PNG image
+        """
+        import matplotlib
+        matplotlib.use('Agg')  # Non-interactive backend
+        import matplotlib.pyplot as plt
+        import matplotlib.dates
+        import io
+        import base64
+
+        # Create figure
+        plt.figure(figsize=(8, 4.5))
+
+        # Plot line chart with markers
+        plt.plot(data.index, data.values, marker='o', linewidth=2, markersize=6, color='#2E86AB')
+
+        # Grid
+        plt.grid(True, alpha=0.3)
+
+        # Format x-axis dates
+        ax = plt.gca()
+        ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=2))
+        plt.xticks(rotation=45, ha='right')
+
+        # Tight layout
+        plt.tight_layout()
+
+        # Convert to base64
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+        plt.close()
+
+        return image_base64
+
+    def _generate_charts(self, anomalies_df: pd.DataFrame) -> Dict[str, str]:
+        """
+        Generate line charts for anomalous metrics.
+
+        Args:
+            anomalies_df: DataFrame containing anomaly data with 'metric' column
+
+        Returns:
+            dict: Mapping of metric names to base64-encoded chart images
+        """
+        if self.chart_data_reader is None:
+            return {}
+
+        # Load chart data
+        try:
+            chart_data = self.chart_data_reader.load()
+        except Exception as e:
+            # If chart data loading fails, skip charts
+            return {}
+
+        # Get unique metrics from anomalies
+        anomalous_metrics = anomalies_df['metric'].unique()
+
+        # Generate charts for each metric
+        charts = {}
+        for metric in anomalous_metrics:
+            # Check if metric exists in chart data columns
+            if metric in chart_data.columns:
+                metric_data = chart_data[metric]
+
+                # Skip if all NaN
+                if metric_data.notna().any():
+                    try:
+                        chart_base64 = self._create_line_chart(metric, metric_data)
+                        charts[metric] = chart_base64
+                    except Exception:
+                        # Skip chart if generation fails
+                        continue
+
+        return charts
+
     def notify(self, payload: Dict[str, Any]) -> None:
         """
         Send email notification with anomaly data.
@@ -149,61 +280,125 @@ class EmailNotifier(Notifier, TransformableMixin):
                 f"'anomalies' must be a DataFrame, got {type(anomalies_df).__name__}"
             )
 
-        # Apply transformers (e.g., filter only significant anomalies)
+        # Generate charts BEFORE applying transformers (need metric column)
+        # Charts are generated using original anomalies_df with all columns
+        charts = self._generate_charts(anomalies_df)
+
+        # Apply transformers (e.g., filter only significant anomalies, select columns)
         filtered_df = self._apply_transformers(anomalies_df, 'before')
 
         # Skip notification if no data after filtering
         if filtered_df.empty:
             return
 
+        # Create a mapping of row data to charts
+        # If metric column exists in filtered_df, use it; otherwise use row index
+        if 'metric' in filtered_df.columns:
+            # Standard case: metric column present
+            chart_mapping = charts
+        else:
+            # Metric column removed by transformer: map by row index using original df
+            chart_mapping = {}
+            for idx, row in filtered_df.iterrows():
+                # Find corresponding metric in original df
+                if idx in anomalies_df.index and 'metric' in anomalies_df.columns:
+                    metric = anomalies_df.loc[idx, 'metric']
+                    if metric in charts:
+                        chart_mapping[idx] = charts[metric]
+
         # Generate HTML email content
-        html_body = self._generate_html_body(filtered_df)
+        html_body = self._generate_html_body(filtered_df, chart_mapping)
 
         # Send email
         self._send_email(html_body)
 
-    def _generate_html_body(self, df: pd.DataFrame) -> str:
+    def _generate_html_body(self, df: pd.DataFrame, charts: Optional[Dict[str, str]] = None) -> str:
         """
-        Generate HTML email body with styled table.
+        Generate HTML email body with styled table and optional charts.
 
         Args:
             df: DataFrame with anomaly data
+            charts: Optional dict mapping metric names to base64-encoded chart images
 
         Returns:
             str: HTML content
         """
-        # Apply styling to DataFrame
-        styled_df = df.style
+        charts = charts or {}
 
-        # Format numeric columns with 2 decimal places
-        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-        if numeric_cols:
-            styled_df = styled_df.format({col: '{:.2f}' for col in numeric_cols}, na_rep='-')
+        # Helper function to format numeric values
+        def format_value(val):
+            if pd.isna(val):
+                return '-'
+            if isinstance(val, (int, float)):
+                return f'{val:.2f}'
+            return str(val)
 
-        # Apply status column styling
-        if 'status' in df.columns:
-            def style_status(val):
-                if pd.isna(val):
-                    return ''
-                status_upper = str(val).upper()
-                if 'BELOW' in status_upper:
-                    return 'color: #2196F3; font-weight: bold;'
-                elif 'ABOVE' in status_upper:
-                    return 'color: #f44336; font-weight: bold;'
-                elif 'IN_RANGE' in status_upper or 'IN RANGE' in status_upper:
-                    return 'color: #4CAF50;'
-                elif 'NO_FORECAST' in status_upper or 'NO FORECAST' in status_upper:
-                    return 'color: #9E9E9E;'
+        # Helper function to get status color
+        def get_status_style(status):
+            if pd.isna(status):
                 return ''
+            status_upper = str(status).upper()
+            if 'BELOW' in status_upper:
+                return 'color: #2196F3; font-weight: bold;'
+            elif 'ABOVE' in status_upper:
+                return 'color: #f44336; font-weight: bold;'
+            elif 'IN_RANGE' in status_upper or 'IN RANGE' in status_upper:
+                return 'color: #4CAF50;'
+            elif 'NO_FORECAST' in status_upper or 'NO FORECAST' in status_upper:
+                return 'color: #9E9E9E;'
+            return ''
 
-            styled_df = styled_df.map(style_status, subset=['status'])
+        # Build table HTML manually
+        table_html = '<table class="anomaly-table">'
 
-        # Hide index and set table attributes
-        styled_df = styled_df.hide(axis='index')
-        styled_df = styled_df.set_table_attributes('class="anomaly-table" id="anomaly-data"')
+        # Table header
+        table_html += '<thead><tr>'
+        for col in df.columns:
+            table_html += f'<th>{col}</th>'
+        if charts:
+            table_html += '<th>Chart</th>'
+        table_html += '</tr></thead>'
 
-        # Generate table HTML using pandas
-        table_html = styled_df.to_html()
+        # Table body
+        table_html += '<tbody>'
+        for idx, row in df.iterrows():
+            table_html += '<tr>'
+            for col in df.columns:
+                val = row[col]
+                formatted_val = format_value(val)
+
+                # Apply status styling
+                if col == 'status':
+                    style = get_status_style(val)
+                    table_html += f'<td style="{style}">{formatted_val}</td>'
+                else:
+                    table_html += f'<td>{formatted_val}</td>'
+
+            # Add chart column if charts exist
+            if charts:
+                # Try to get chart by metric name first, then by index
+                chart_base64 = None
+                chart_key = None
+
+                if 'metric' in df.columns:
+                    # Standard case: use metric column
+                    metric_name = row.get('metric', '')
+                    if metric_name in charts:
+                        chart_base64 = charts[metric_name]
+                        chart_key = metric_name
+                else:
+                    # Metric column removed: use row index
+                    if idx in charts:
+                        chart_base64 = charts[idx]
+                        chart_key = str(idx)
+
+                if chart_base64:
+                    table_html += f'<td class="chart-cell"><img src="data:image/png;base64,{chart_base64}" alt="{chart_key}" class="chart-img" /></td>'
+                else:
+                    table_html += '<td class="chart-cell">-</td>'
+
+            table_html += '</tr>'
+        table_html += '</tbody></table>'
 
         # Email header with CSS
         html = """
@@ -220,6 +415,7 @@ class EmailNotifier(Notifier, TransformableMixin):
                     padding: 30px;
                     border-radius: 8px;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    overflow-x: auto;
                 }}
                 h1 {{
                     color: #333;
@@ -241,13 +437,27 @@ class EmailNotifier(Notifier, TransformableMixin):
                     padding: 12px;
                     text-align: left;
                     font-weight: bold;
+                    white-space: nowrap;
                 }}
                 .anomaly-table td {{
                     padding: 10px;
                     border-bottom: 1px solid #ddd;
+                    vertical-align: middle;
                 }}
                 .anomaly-table tr:hover {{
                     background-color: #f5f5f5;
+                }}
+                .chart-cell {{
+                    text-align: center;
+                    padding: 5px;
+                    width: 320px;
+                }}
+                .chart-img {{
+                    max-width: 300px;
+                    height: auto;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
                 }}
                 .footer {{
                     margin-top: 30px;
