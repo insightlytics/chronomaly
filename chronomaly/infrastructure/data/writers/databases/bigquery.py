@@ -2,6 +2,7 @@
 BigQuery data writer implementation.
 """
 
+import os
 import pandas as pd
 from typing import Optional, Dict, List, Callable
 from google.cloud import bigquery
@@ -34,8 +35,8 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
         self,
         service_account_file: Optional[str] = None,
         project: Optional[str] = None,
-        dataset: str = None,
-        table: str = None,
+        dataset: Optional[str] = None,
+        table: Optional[str] = None,
         create_disposition: str = 'CREATE_IF_NEEDED',
         write_disposition: str = 'WRITE_TRUNCATE',
         transformers: Optional[Dict[str, List[Callable]]] = None
@@ -57,10 +58,33 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
                 f"Must be one of: {', '.join(sorted(self.VALID_WRITE_DISPOSITIONS))}"
             )
 
-        self.service_account_file = service_account_file
+        # BUG-005 FIX: Validate service account file path
+        if service_account_file:
+            if not service_account_file.strip():
+                raise ValueError("service_account_file cannot be empty")
+
+            abs_path = os.path.abspath(service_account_file)
+            if not os.path.isfile(abs_path):
+                raise FileNotFoundError(
+                    f"Service account file not found: {abs_path}"
+                )
+
+            if not os.access(abs_path, os.R_OK):
+                raise PermissionError(
+                    f"Service account file is not readable: {abs_path}"
+                )
+
+            if not abs_path.endswith('.json'):
+                raise ValueError(
+                    "Service account file must be a JSON file (.json extension)"
+                )
+
+            self.service_account_file: Optional[str] = abs_path
+        else:
+            self.service_account_file = service_account_file
         self.project = project
-        self.dataset = dataset
-        self.table = table
+        self.dataset: str = dataset  # type: ignore[assignment]
+        self.table: str = table  # type: ignore[assignment]
         self.create_disposition = create_disposition
         self.write_disposition = write_disposition
         self._client = None
@@ -83,7 +107,6 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
                 self._client = bigquery.Client(project=self.project)
         return self._client
 
-
     def write(self, dataframe: pd.DataFrame) -> None:
         """
         Write forecast results to BigQuery table.
@@ -92,18 +115,33 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
             dataframe: The forecast results as a pandas DataFrame
 
         Raises:
+            TypeError: If dataframe is not a pandas DataFrame
+            ValueError: If dataframe is empty
             RuntimeError: If the BigQuery write job fails
         """
         # Apply transformers before writing data
         dataframe = self._apply_transformers(dataframe, 'before')
 
+        # BUG-004 FIX: Validate dataframe type and emptiness
+        if not isinstance(dataframe, pd.DataFrame):
+            raise TypeError(
+                f"Expected pandas DataFrame, got {type(dataframe).__name__}"
+            )
+
+        if dataframe.empty:
+            raise ValueError("Cannot write empty DataFrame to BigQuery")
+
         client = self._get_client()
 
-        # Construct table ID (modern API - replaces deprecated dataset().table())
+        # BUG-007 FIX: Construct table ID with proper project handling
         if self.project:
             table_id = f"{self.project}.{self.dataset}.{self.table}"
+        elif client.project:
+            table_id = f"{client.project}.{self.dataset}.{self.table}"
         else:
-            table_id = f"{self.dataset}.{self.table}"
+            raise ValueError(
+                "project must be specified either in constructor or in BigQuery client"
+            )
 
         # Configure load job
         bigquery_job_config = bigquery.LoadJobConfig()
@@ -137,3 +175,25 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
                 f"Failed to write to BigQuery table {self.dataset}.{self.table}. "
                 f"Error: {str(e)}"
             ) from e
+
+    def close(self) -> None:
+        """
+        BUG-006 FIX: Close BigQuery client and release resources.
+
+        This method should be called when the writer is no longer needed,
+        or use the writer as a context manager for automatic cleanup.
+        """
+        if self._client is not None:
+            try:
+                self._client.close()
+            finally:
+                self._client = None
+
+    def __enter__(self):
+        """Support for context manager protocol."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Ensure client is closed when used as context manager."""
+        self.close()
+        return False

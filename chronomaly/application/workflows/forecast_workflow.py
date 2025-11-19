@@ -102,8 +102,10 @@ class ForecastWorkflow:
         """
         # Validate horizon parameter (BUG-011 fix)
         if not isinstance(horizon, int) or horizon <= 0:
+            type_name = type(horizon).__name__
             raise ValueError(
-                f"horizon must be a positive integer, got: {horizon} (type: {type(horizon).__name__})"
+                f"horizon must be a positive integer, got: {horizon} "
+                f"(type: {type_name})"
             )
 
         # Step 1: Load data (transformations handled by reader)
@@ -160,8 +162,10 @@ class ForecastWorkflow:
         """
         # Validate horizon parameter
         if not isinstance(horizon, int) or horizon <= 0:
+            type_name = type(horizon).__name__
             raise ValueError(
-                f"horizon must be a positive integer, got: {horizon} (type: {type(horizon).__name__})"
+                f"horizon must be a positive integer, got: {horizon} "
+                f"(type: {type_name})"
             )
 
         # Step 1: Load data (transformations handled by reader)

@@ -3,6 +3,7 @@ Base abstract class for forecasters.
 """
 
 from abc import ABC, abstractmethod
+from typing import Any
 import pandas as pd
 
 
@@ -15,13 +16,16 @@ class Forecaster(ABC):
     """
 
     @abstractmethod
-    def forecast(self, dataframe: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    def forecast(
+        self, dataframe: pd.DataFrame, horizon: int, **kwargs: Any
+    ) -> pd.DataFrame:
         """
         Generate forecast for the given dataframe.
 
         Args:
             dataframe: Input pandas DataFrame with time series data
             horizon: Number of periods to forecast
+            **kwargs: Additional forecaster-specific parameters
 
         Returns:
             pd.DataFrame: Forecast results as a pandas DataFrame

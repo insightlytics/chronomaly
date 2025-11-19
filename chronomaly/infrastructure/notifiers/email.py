@@ -147,15 +147,38 @@ class EmailNotifier(Notifier, TransformableMixin):
 
         Returns:
             dict: SMTP configuration parameters
+
+        Raises:
+            ValueError: If SMTP credentials are missing or port is invalid
         """
         import os
 
+        # BUG-008 FIX: Validate SMTP credentials
+        smtp_user = os.getenv('SMTP_USER', '')
+        smtp_password = os.getenv('SMTP_PASSWORD', '')
+
+        if not smtp_user or not smtp_password:
+            raise ValueError(
+                "SMTP_USER and SMTP_PASSWORD environment variables must be set. "
+                "Check your .env file or environment configuration."
+            )
+
+        # BUG-009 FIX: Validate SMTP port
+        try:
+            port = int(os.getenv('SMTP_PORT', '587'))
+            if not (1 <= port <= 65535):
+                raise ValueError(f"SMTP_PORT must be between 1 and 65535, got {port}")
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid SMTP_PORT environment variable: {str(e)}"
+            ) from e
+
         return {
             'host': os.getenv('SMTP_HOST', 'smtp.gmail.com'),
-            'port': int(os.getenv('SMTP_PORT', '587')),
-            'user': os.getenv('SMTP_USER', ''),
-            'password': os.getenv('SMTP_PASSWORD', ''),
-            'from_email': os.getenv('SMTP_FROM_EMAIL', os.getenv('SMTP_USER', '')),
+            'port': port,
+            'user': smtp_user,
+            'password': smtp_password,
+            'from_email': os.getenv('SMTP_FROM_EMAIL', smtp_user),
             'use_tls': os.getenv('SMTP_USE_TLS', 'True').lower() in ('true', '1', 'yes')
         }
 
@@ -228,10 +251,15 @@ class EmailNotifier(Notifier, TransformableMixin):
         if self.chart_data_reader is None:
             return {}
 
+        # BUG-010 FIX: Check if metric column exists
+        if 'metric' not in anomalies_df.columns:
+            # Can't generate charts without metric column
+            return {}
+
         # Load chart data
         try:
             chart_data = self.chart_data_reader.load()
-        except Exception as e:
+        except Exception:
             # If chart data loading fails, skip charts
             return {}
 
@@ -297,14 +325,19 @@ class EmailNotifier(Notifier, TransformableMixin):
             # Standard case: metric column present
             chart_mapping = charts
         else:
+            # BUG-022 FIX: Add try-except around index matching logic
             # Metric column removed by transformer: map by row index using original df
             chart_mapping = {}
             for idx, row in filtered_df.iterrows():
-                # Find corresponding metric in original df
-                if idx in anomalies_df.index and 'metric' in anomalies_df.columns:
-                    metric = anomalies_df.loc[idx, 'metric']
-                    if metric in charts:
-                        chart_mapping[idx] = charts[metric]
+                try:
+                    # Find corresponding metric in original df
+                    if idx in anomalies_df.index and 'metric' in anomalies_df.columns:
+                        metric = anomalies_df.loc[idx, 'metric']
+                        if metric in charts:
+                            chart_mapping[idx] = charts[metric]
+                except KeyError:
+                    # Skip this row if index doesn't match
+                    continue
 
         # Generate HTML email content
         html_body = self._generate_html_body(filtered_df, chart_mapping)
@@ -393,7 +426,13 @@ class EmailNotifier(Notifier, TransformableMixin):
                         chart_key = str(idx)
 
                 if chart_base64:
-                    table_html += f'<td class="chart-cell"><img src="data:image/png;base64,{chart_base64}" alt="{chart_key}" class="chart-img" /></td>'
+                    img_html = (
+                        f'<td class="chart-cell">'
+                        f'<img src="data:image/png;base64,{chart_base64}" '
+                        f'alt="{chart_key}" class="chart-img" />'
+                        f'</td>'
+                    )
+                    table_html += img_html
                 else:
                     table_html += '<td class="chart-cell">-</td>'
 

@@ -61,6 +61,13 @@ class CumulativeThresholdFilter(DataFrameFilter):
         if df.empty or self.value_column not in df.columns:
             return df.copy()
 
+        # BUG-014 FIX: Validate numeric type before summing
+        if not pd.api.types.is_numeric_dtype(df[self.value_column]):
+            raise TypeError(
+                f"Column '{self.value_column}' must be numeric for cumulative threshold filtering, "
+                f"got dtype: {df[self.value_column].dtype}"
+            )
+
         # Calculate total
         total_value = df[self.value_column].sum()
 

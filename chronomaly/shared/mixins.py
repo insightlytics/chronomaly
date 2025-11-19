@@ -3,7 +3,6 @@ Shared mixins for common functionality.
 """
 
 import pandas as pd
-from typing import Dict, List, Callable
 
 
 class TransformableMixin:
@@ -44,20 +43,29 @@ class TransformableMixin:
             return df
 
         result = df
-        for transformer in self.transformers[stage]:
-            # Support .filter() method (for filters)
-            if hasattr(transformer, 'filter'):
-                result = transformer.filter(result)
-            # Support .format() method (for formatters)
-            elif hasattr(transformer, 'format'):
-                result = transformer.format(result)
-            # Support callable objects (for any transformer)
-            elif callable(transformer):
-                result = transformer(result)
-            else:
-                raise TypeError(
-                    f"Transformer must have .filter(), .format() method or be callable. "
-                    f"Got: {type(transformer).__name__}"
+        # BUG-021 FIX: Add error handling with context
+        for i, transformer in enumerate(self.transformers[stage]):
+            try:
+                # Support .filter() method (for filters)
+                if hasattr(transformer, 'filter'):
+                    result = transformer.filter(result)
+                # Support .format() method (for formatters)
+                elif hasattr(transformer, 'format'):
+                    result = transformer.format(result)
+                # Support callable objects (for any transformer)
+                elif callable(transformer):
+                    result = transformer(result)
+                else:
+                    raise TypeError(
+                        f"Transformer must have .filter(), .format() method or be callable. "
+                        f"Got: {type(transformer).__name__}"
+                    )
+            except Exception as e:
+                transformer_name = type(transformer).__name__
+                error_msg = (
+                    f"Transformer {i+1} ({transformer_name}) failed "
+                    f"during '{stage}' stage: {str(e)}"
                 )
+                raise RuntimeError(error_msg) from e
 
         return result

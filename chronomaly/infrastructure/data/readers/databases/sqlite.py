@@ -125,13 +125,26 @@ class SQLiteDataReader(DataReader, TransformableMixin):
         try:
             df = pd.read_sql_query(self.query, conn, **self.read_sql_kwargs)
 
+            # BUG-002 FIX: Validate that query returned data
+            if df.empty:
+                raise ValueError(
+                    "Query returned no data. Please check your query and data source."
+                )
+
             if self.date_column:
                 if self.date_column not in df.columns:
                     raise ValueError(
                         f"date_column '{self.date_column}' not found in query results. "
                         f"Available columns: {list(df.columns)}"
                     )
-                df[self.date_column] = pd.to_datetime(df[self.date_column])
+
+                # BUG-003 FIX: Add error handling for date parsing
+                try:
+                    df[self.date_column] = pd.to_datetime(df[self.date_column])
+                except Exception as e:
+                    raise ValueError(
+                        f"Failed to parse date_column '{self.date_column}' as datetime: {str(e)}"
+                    ) from e
 
             # Apply transformers after loading data
             df = self._apply_transformers(df, 'after')

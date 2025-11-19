@@ -83,9 +83,16 @@ class ColumnFormatter(DataFrameFormatter):
 
         # Create formatting function
         def format_percentage(value):
-            if multiply_by_100:
-                value = value * 100
-            return f"{value:.{decimal_places}f}%"
+            # BUG-011 FIX: Handle None/NaN and non-numeric values gracefully
+            if pd.isna(value):
+                return '-'
+            try:
+                numeric_value = float(value)
+                if multiply_by_100:
+                    numeric_value = numeric_value * 100
+                return f"{numeric_value:.{decimal_places}f}%"
+            except (TypeError, ValueError):
+                return str(value)
 
         # Create formatters dict
         formatters = {col: format_percentage for col in column_list}
@@ -107,8 +114,14 @@ class ColumnFormatter(DataFrameFormatter):
 
         result = df.copy()
 
+        # BUG-012 FIX: Add error handling with context
         for column, format_func in self.formatters.items():
             if column in result.columns:
-                result[column] = result[column].apply(format_func)
+                try:
+                    result[column] = result[column].apply(format_func)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to apply formatter to column '{column}': {str(e)}"
+                    ) from e
 
         return result

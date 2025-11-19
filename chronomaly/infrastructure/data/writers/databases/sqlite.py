@@ -92,7 +92,6 @@ class SQLiteDataWriter(DataWriter, TransformableMixin):
         self.transformers = transformers or {}
         self.to_sql_kwargs = kwargs
 
-
     def write(self, dataframe: pd.DataFrame) -> None:
         """
         Write forecast results to SQLite database.

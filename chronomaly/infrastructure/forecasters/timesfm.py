@@ -88,12 +88,12 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
 
         return self._model
 
-
     def forecast(
         self,
         dataframe: pd.DataFrame,
         horizon: int,
-        return_point: bool = False
+        return_point: bool = False,
+        **kwargs
     ) -> pd.DataFrame:
         """
         Generate forecast using TimesFM model.
@@ -229,6 +229,41 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
                 f"Original error: {str(e)}"
             )
 
+    def _calculate_start_date(self, last_date: pd.Timestamp) -> pd.Timestamp:
+        """
+        BUG-016 FIX: Extract duplicate date calculation logic into helper method.
+
+        Calculate the start date for forecasts based on the last date and frequency.
+
+        Args:
+            last_date: Last date from the input dataframe
+
+        Returns:
+            pd.Timestamp: Start date for forecasts (one period after last_date)
+
+        Raises:
+            ValueError: If frequency is invalid
+        """
+        # Calculate the appropriate offset based on frequency
+        if self.frequency == 'D':
+            return last_date + pd.Timedelta(days=1)
+        elif self.frequency == 'H':
+            return last_date + pd.Timedelta(hours=1)
+        elif self.frequency == 'W':
+            return last_date + pd.Timedelta(weeks=1)
+        elif self.frequency == 'M':
+            return last_date + pd.DateOffset(months=1)
+        else:
+            # BUG-018 FIX: Wrap to_offset call in try-except
+            try:
+                return last_date + pd.tseries.frequencies.to_offset(self.frequency)
+            except (ValueError, KeyError) as e:
+                raise ValueError(
+                    f"Invalid frequency '{self.frequency}'. "
+                    f"Please use standard pandas frequency strings like 'D', 'H', 'W', 'M', etc. "
+                    f"Original error: {str(e)}"
+                ) from e
+
     def _format_point_forecast(
         self,
         forecast_point: np.ndarray,
@@ -248,22 +283,11 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
         """
         forecast_data = forecast_point.T
 
-        # BUG-34 FIX: Use configurable frequency instead of hardcoded 'D'
+        # BUG-034 FIX: Use configurable frequency instead of hardcoded 'D'
+        # BUG-016 FIX: Use extracted helper method
         # Generate future dates
         last_date = self._get_last_date(dataframe)
-
-        # Calculate the appropriate offset based on frequency
-        if self.frequency == 'D':
-            start_date = last_date + pd.Timedelta(days=1)
-        elif self.frequency == 'H':
-            start_date = last_date + pd.Timedelta(hours=1)
-        elif self.frequency == 'W':
-            start_date = last_date + pd.Timedelta(weeks=1)
-        elif self.frequency == 'M':
-            start_date = last_date + pd.DateOffset(months=1)
-        else:
-            # For other frequencies, use pd.date_range to calculate offset
-            start_date = last_date + pd.tseries.frequencies.to_offset(self.frequency)
+        start_date = self._calculate_start_date(last_date)
 
         new_index = pd.date_range(
             start=start_date,
@@ -278,7 +302,11 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
         )
         dataframe_forecast.columns.name = None
         dataframe_forecast.insert(0, "date", new_index)
-        dataframe_forecast['date'] = dataframe_forecast['date'].dt.date
+
+        # BUG-017 FIX: Only convert to date for daily or larger granularity
+        # Keep full datetime for hourly/minute forecasts
+        if self.frequency in ['D', 'W', 'M', 'Q', 'Y', 'A']:
+            dataframe_forecast['date'] = dataframe_forecast['date'].dt.date
 
         return dataframe_forecast
 
@@ -327,21 +355,11 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
 
         forecast_data = np.array(forecast_data, dtype=object).T
 
-        # BUG-34 FIX: Use configurable frequency instead of hardcoded 'D'
+        # BUG-034 FIX: Use configurable frequency instead of hardcoded 'D'
+        # BUG-016 FIX: Use extracted helper method
         # Generate future dates
         last_date = self._get_last_date(dataframe)
-
-        # Calculate the appropriate offset based on frequency
-        if self.frequency == 'D':
-            start_date = last_date + pd.Timedelta(days=1)
-        elif self.frequency == 'H':
-            start_date = last_date + pd.Timedelta(hours=1)
-        elif self.frequency == 'W':
-            start_date = last_date + pd.Timedelta(weeks=1)
-        elif self.frequency == 'M':
-            start_date = last_date + pd.DateOffset(months=1)
-        else:
-            start_date = last_date + pd.tseries.frequencies.to_offset(self.frequency)
+        start_date = self._calculate_start_date(last_date)
 
         new_index = pd.date_range(
             start=start_date,
@@ -356,6 +374,10 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
         )
         dataframe_forecast.columns.name = None
         dataframe_forecast.insert(0, "date", new_index)
-        dataframe_forecast['date'] = dataframe_forecast['date'].dt.date
+
+        # BUG-017 FIX: Only convert to date for daily or larger granularity
+        # Keep full datetime for hourly/minute forecasts
+        if self.frequency in ['D', 'W', 'M', 'Q', 'Y', 'A']:
+            dataframe_forecast['date'] = dataframe_forecast['date'].dt.date
 
         return dataframe_forecast

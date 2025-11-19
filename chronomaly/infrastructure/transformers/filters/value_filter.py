@@ -3,7 +3,7 @@ Value filter - keeps rows based on column values or numeric thresholds.
 """
 
 import pandas as pd
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Any
 from .base import DataFrameFilter
 
 
@@ -48,20 +48,29 @@ class ValueFilter(DataFrameFilter):
     def __init__(
         self,
         column: str,
-        values: Optional[Union[any, List[any]]] = None,
+        values: Optional[Union[Any, List[Any]]] = None,
         mode: str = 'include',
         min_value: Optional[float] = None,
         max_value: Optional[float] = None
     ):
         # Validate inputs
         if values is None and min_value is None and max_value is None:
-            raise ValueError("At least one of 'values', 'min_value', or 'max_value' must be specified")
+            err_msg = (
+                "At least one of 'values', 'min_value', or 'max_value' "
+                "must be specified"
+            )
+            raise ValueError(err_msg)
 
         if mode not in ['include', 'exclude']:
             raise ValueError(f"mode must be 'include' or 'exclude', got {mode}")
 
         self.column = column
-        self.values = values if values is None else (values if isinstance(values, list) else [values])
+        if values is None:
+            self.values = None
+        elif isinstance(values, list):
+            self.values = values
+        else:
+            self.values = [values]
         self.mode = mode
         self.min_value = min_value
         self.max_value = max_value
@@ -89,6 +98,14 @@ class ValueFilter(DataFrameFilter):
                 result = result[~result[self.column].isin(self.values)]
 
         # Apply numeric filters (if min/max specified)
+        # BUG-013 FIX: Validate numeric operations
+        if self.min_value is not None or self.max_value is not None:
+            if not pd.api.types.is_numeric_dtype(result[self.column]):
+                raise TypeError(
+                    f"Column '{self.column}' must be numeric for min/max filtering, "
+                    f"got dtype: {result[self.column].dtype}"
+                )
+
         if self.min_value is not None:
             result = result[result[self.column] >= self.min_value]
 

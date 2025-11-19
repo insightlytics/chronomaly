@@ -17,17 +17,21 @@ class PivotTransformer:
         index: Column name(s) to use as index (typically date column)
         columns: Column name(s) to use as pivot columns (time series identifiers)
         values: Column name to use as values
+        frequency: Pandas frequency string for DatetimeIndex (default: None to infer or use 'D')
+                   Common values: 'D' (daily), 'H' (hourly), 'W' (weekly), 'M' (monthly)
     """
 
     def __init__(
         self,
         index: Union[str, List[str]],
         columns: Union[str, List[str]],
-        values: str
+        values: str,
+        frequency: Union[str, None] = None  # BUG-015 FIX: Make frequency configurable
     ):
         self.index = index
         self.columns = columns
         self.values = values
+        self.frequency = frequency
 
     def __call__(self, dataframe: pd.DataFrame) -> pd.DataFrame:
         """
@@ -102,7 +106,13 @@ class PivotTransformer:
                 # Check if column actually contains strings
                 try:
                     # Only apply string operations if column contains strings
-                    if df[column].apply(lambda x: isinstance(x, str) if x is not None else True).all():
+                    def is_string_or_none(x):
+                        if x is None:
+                            return True
+                        return isinstance(x, str)
+
+                    has_strings = df[column].apply(is_string_or_none).all()
+                    if has_strings:
                         df[column] = df[column].str.lower().str.replace(
                             r'[\(\)\.\-\_\s]', '', regex=True
                         )
@@ -152,8 +162,10 @@ class PivotTransformer:
         # Fill NaN values with 0
         dataframe_pivot = dataframe_pivot.fillna(0)
 
-        # If single index is DatetimeIndex, set daily frequency
+        # BUG-015 FIX: Use configurable frequency instead of hardcoded 'D'
+        # If single index is DatetimeIndex, set frequency
         if len(index_list) == 1 and isinstance(dataframe_pivot.index, pd.DatetimeIndex):
-            dataframe_pivot = dataframe_pivot.asfreq('D', fill_value=0)
+            freq = self.frequency if self.frequency is not None else 'D'
+            dataframe_pivot = dataframe_pivot.asfreq(freq, fill_value=0)
 
         return dataframe_pivot

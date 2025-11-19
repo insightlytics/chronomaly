@@ -4,7 +4,6 @@ Forecast vs Actual anomaly detection implementation.
 
 import warnings
 import pandas as pd
-import numpy as np
 from typing import Optional, List, Dict, Callable
 from .base import AnomalyDetector
 from chronomaly.shared import TransformableMixin
@@ -24,6 +23,7 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         date_column: Name of the date column (default: 'date')
         exclude_columns: List of columns to exclude from comparison
         dimension_names: List of dimension names to extract from metric
+        dimension_separator: Separator used when splitting metric names (default: '_')
         lower_quantile_idx: Index of lower confidence bound (default: 1 for q10)
         upper_quantile_idx: Index of upper confidence bound (default: 9 for q90)
         transformers: Optional dict of transformer lists to apply after detection
@@ -39,6 +39,7 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         date_column: str = 'date',
         exclude_columns: Optional[List[str]] = None,
         dimension_names: Optional[List[str]] = None,
+        dimension_separator: str = '_',  # BUG-020 FIX: Make separator configurable
         lower_quantile_idx: int = 1,
         upper_quantile_idx: int = 9,
         transformers: Optional[Dict[str, List[Callable]]] = None
@@ -46,10 +47,10 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         self.date_column = date_column
         self.exclude_columns = exclude_columns or [date_column]
         self.dimension_names = dimension_names
+        self.dimension_separator = dimension_separator
         self.lower_quantile_idx = lower_quantile_idx
         self.upper_quantile_idx = upper_quantile_idx
         self.transformers = transformers or {}
-
 
     def detect(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame) -> pd.DataFrame:
         """Detect anomalies by comparing forecast quantiles with actual values."""
@@ -131,12 +132,18 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
 
     def _prepare_data(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame):
         # Assume actual_df is already pivoted (use PivotTransformer outside if needed)
-        actual_pivot = actual_df.reset_index() if isinstance(actual_df.index, pd.DatetimeIndex) else actual_df.copy()
+        if isinstance(actual_df.index, pd.DatetimeIndex):
+            actual_pivot = actual_df.reset_index()
+        else:
+            actual_pivot = actual_df.copy()
         forecast_cols = set(forecast_df.columns) - set(self.exclude_columns)
         actual_cols = set(actual_pivot.columns) - set(self.exclude_columns)
         all_columns = sorted(forecast_cols.union(actual_cols))
 
-        forecast_std = self._standardize_columns(forecast_df.copy(), all_columns, '0|0|0|0|0|0|0|0|0|0')
+        quantile_defaults = '0|0|0|0|0|0|0|0|0|0'
+        forecast_std = self._standardize_columns(
+            forecast_df.copy(), all_columns, quantile_defaults
+        )
         actual_std = self._standardize_columns(actual_pivot.copy(), all_columns, 0.0)
 
         return forecast_std, actual_std, all_columns
@@ -152,32 +159,61 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
 
         return df
 
-    def _compare_all_metrics(self, forecast_std: pd.DataFrame, actual_std: pd.DataFrame, all_columns: list):
+    def _compare_all_metrics(
+        self, forecast_std: pd.DataFrame, actual_std: pd.DataFrame, all_columns: list
+    ):
         results = []
         for idx in forecast_std.index:
-            date_value = forecast_std.loc[idx, self.date_column] if self.date_column in forecast_std.columns else None
+            if self.date_column in forecast_std.columns:
+                date_value = forecast_std.loc[idx, self.date_column]
+            else:
+                date_value = None
             forecast_row = forecast_std.loc[idx]
-            actual_row = actual_std.loc[idx] if idx in actual_std.index else None
+            if idx in actual_std.index:
+                actual_row = actual_std.loc[idx]
+            else:
+                actual_row = None
 
             if actual_row is None:
                 continue
 
             for column in all_columns:
-                result = self._compare_metric(column, forecast_row[column], actual_row[column], date_value)
+                result = self._compare_metric(
+                    column, forecast_row[column], actual_row[column], date_value
+                )
                 results.append(result)
 
         return results
 
-    def _compare_metric(self, column: str, forecast_value: str, actual_value: float, date_value: Optional[pd.Timestamp] = None):
+    def _compare_metric(
+        self, column: str, forecast_value: str, actual_value: float,
+        date_value: Optional[pd.Timestamp] = None
+    ):
         forecast_parts = str(forecast_value).split('|')
 
         try:
-            point_forecast = float(forecast_parts[self.QUANTILE_POINT_IDX]) if len(forecast_parts) > self.QUANTILE_POINT_IDX else 0.0
-            lower_bound = float(forecast_parts[self.lower_quantile_idx]) if len(forecast_parts) > self.lower_quantile_idx else 0.0
-            upper_bound = float(forecast_parts[self.upper_quantile_idx]) if len(forecast_parts) > self.upper_quantile_idx else 0.0
+            has_point = len(forecast_parts) > self.QUANTILE_POINT_IDX
+            point_forecast = (
+                float(forecast_parts[self.QUANTILE_POINT_IDX])
+                if has_point else 0.0
+            )
+            has_lower = len(forecast_parts) > self.lower_quantile_idx
+            lower_bound = (
+                float(forecast_parts[self.lower_quantile_idx])
+                if has_lower else 0.0
+            )
+            has_upper = len(forecast_parts) > self.upper_quantile_idx
+            upper_bound = (
+                float(forecast_parts[self.upper_quantile_idx])
+                if has_upper else 0.0
+            )
 
             if len(forecast_parts) < self.EXPECTED_QUANTILE_COUNT:
-                warnings.warn(f"Expected {self.EXPECTED_QUANTILE_COUNT} quantiles, got {len(forecast_parts)}.")
+                count_msg = (
+                    f"Expected {self.EXPECTED_QUANTILE_COUNT} quantiles, "
+                    f"got {len(forecast_parts)}."
+                )
+                warnings.warn(count_msg)
         except (ValueError, IndexError):
             point_forecast = lower_bound = upper_bound = 0.0
 
@@ -198,10 +234,18 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         else:
             if actual < lower_bound:
                 status = 'BELOW_LOWER'
-                deviation_pct = ((lower_bound - actual) / lower_bound) if lower_bound != 0 else (abs(actual) if actual != 0 else 0.0)
+                # BUG-019 FIX: Use float('inf') when bound is 0 and actual != 0
+                if lower_bound != 0:
+                    deviation_pct = (lower_bound - actual) / lower_bound
+                else:
+                    deviation_pct = float('inf') if actual != 0 else 0.0
             elif actual > upper_bound:
                 status = 'ABOVE_UPPER'
-                deviation_pct = ((actual - upper_bound) / upper_bound) if upper_bound != 0 else (abs(actual) if actual != 0 else 0.0)
+                # BUG-019 FIX: Use float('inf') when bound is 0 and actual != 0
+                if upper_bound != 0:
+                    deviation_pct = (actual - upper_bound) / upper_bound
+                else:
+                    deviation_pct = float('inf') if actual != 0 else 0.0
 
         result = {
             'metric': column,
@@ -226,16 +270,28 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
             return df
 
         df = df.copy()
-        metric_parts = df['metric'].str.split('_', expand=True)
 
-        for i, dim_name in enumerate(self.dimension_names):
-            if i < metric_parts.shape[1]:
-                df[dim_name] = metric_parts[i]
-            else:
+        # BUG-020 FIX: Add error handling around split operation
+        try:
+            metric_parts = df['metric'].str.split(self.dimension_separator, expand=True)
+
+            for i, dim_name in enumerate(self.dimension_names):
+                if i < metric_parts.shape[1]:
+                    df[dim_name] = metric_parts[i]
+                else:
+                    df[dim_name] = None
+        except Exception as e:
+            # If split fails, add warning and skip dimension extraction
+            warnings.warn(
+                f"Failed to split metric names using separator '{self.dimension_separator}'. "
+                f"Dimension columns will be set to None. Error: {str(e)}",
+                UserWarning
+            )
+            for dim_name in self.dimension_names:
                 df[dim_name] = None
 
         return df
 
 
-# Backward compatibility alias  
+# Backward compatibility alias
 ForecastActualComparator = ForecastActualAnomalyDetector
