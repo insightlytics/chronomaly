@@ -8,7 +8,7 @@ from datetime import datetime
 import pandas as pd
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import List, Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable
 from .base import Notifier
 from chronomaly.shared import TransformableMixin
 
@@ -118,9 +118,9 @@ class EmailNotifier(Notifier, TransformableMixin):
 
     def __init__(
         self,
-        to: List[str] | str,
+        to: list[str] | str,
         subject: Optional[str] = None,
-        transformers: Optional[Dict[str, List[Callable]]] = None,
+        transformers: Optional[Dict[str, list[Callable]]] = None,
         chart_data_reader: Optional[Any] = None
     ):
         # Validate and normalize recipients
