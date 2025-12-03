@@ -379,8 +379,11 @@ class EmailNotifier(Notifier, TransformableMixin):
                 # Try to get the most recent (max) date from the data
                 date_series = pd.to_datetime(anomalies_df['date'])
                 anomaly_date = date_series.max()
+                # Check if result is NaT (happens when all dates are NaT)
+                if pd.isna(anomaly_date):
+                    anomaly_date = None
                 # Convert to Python datetime if it's a Timestamp
-                if hasattr(anomaly_date, 'to_pydatetime'):
+                elif hasattr(anomaly_date, 'to_pydatetime'):
                     anomaly_date = anomaly_date.to_pydatetime()
             except (ValueError, TypeError) as e:
                 import warnings
