@@ -215,3 +215,6 @@ specs/
 
 # macOS
 .DS_Store
+
+# Custom
+playground/
