@@ -303,8 +303,11 @@ class EmailNotifier(Notifier, TransformableMixin):
                     try:
                         chart_base64 = self._create_line_chart(metric, metric_data)
                         charts[metric] = chart_base64
-                    except Exception:
-                        # Skip chart if generation fails
+                    except (ValueError, TypeError, RuntimeError) as e:
+                        import warnings
+                        warnings.warn(
+                            f"Failed to generate chart for metric '{metric}': {str(e)}"
+                        )
                         continue
 
         return charts
@@ -343,8 +346,11 @@ class EmailNotifier(Notifier, TransformableMixin):
                 # Convert to Python datetime if it's a Timestamp
                 if hasattr(anomaly_date, 'to_pydatetime'):
                     anomaly_date = anomaly_date.to_pydatetime()
-            except Exception:
-                # If date extraction fails, continue without it
+            except (ValueError, TypeError) as e:
+                import warnings
+                warnings.warn(
+                    f"Failed to extract date from anomalies DataFrame: {str(e)}"
+                )
                 anomaly_date = None
 
         # Store anomaly_date for use in _send_email
