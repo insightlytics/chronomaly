@@ -174,32 +174,43 @@ class TestEmailNotifier:
     @patch('smtplib.SMTP')
     def test_send_email_success(self, mock_smtp):
         """Test successful email sending"""
-        df = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['sales'],
-            'status': ['ABOVE_UPPER'],
-            'actual': [100],
-            'forecast': [50],
-            'deviation_pct': [100.0]
-        })
+        import os
+        
+        # Set SMTP credentials for this test (authentication is conditional)
+        os.environ['SMTP_USER'] = 'test@example.com'
+        os.environ['SMTP_PASSWORD'] = 'testpass'
+        
+        try:
+            df = pd.DataFrame({
+                'date': ['2024-01-01'],
+                'metric': ['sales'],
+                'status': ['ABOVE_UPPER'],
+                'actual': [100],
+                'forecast': [50],
+                'deviation_pct': [100.0]
+            })
 
-        notifier = EmailNotifier(to="test@example.com")
+            notifier = EmailNotifier(to="test@example.com")
 
-        # Mock SMTP server
-        mock_server = MagicMock()
-        mock_smtp.return_value.__enter__.return_value = mock_server
+            # Mock SMTP server
+            mock_server = MagicMock()
+            mock_smtp.return_value.__enter__.return_value = mock_server
 
-        # Send notification
-        notifier.notify({'anomalies': df})
+            # Send notification
+            notifier.notify({'anomalies': df})
 
-        # Verify SMTP was called (with config from environment or defaults)
-        assert mock_smtp.call_count == 1
-        # Check port is correct
-        call_args = mock_smtp.call_args
-        assert call_args[0][1] == 587  # Port
-        mock_server.starttls.assert_called_once()
-        mock_server.login.assert_called_once()
-        mock_server.send_message.assert_called_once()
+            # Verify SMTP was called (with config from environment or defaults)
+            assert mock_smtp.call_count == 1
+            # Check port is correct
+            call_args = mock_smtp.call_args
+            assert call_args[0][1] == 587  # Port
+            mock_server.starttls.assert_called_once()
+            mock_server.login.assert_called_once()  # Now called because credentials are set
+            mock_server.send_message.assert_called_once()
+        finally:
+            # Cleanup
+            os.environ.pop('SMTP_USER', None)
+            os.environ.pop('SMTP_PASSWORD', None)
 
     @patch('smtplib.SMTP')
     def test_html_generation(self, mock_smtp):

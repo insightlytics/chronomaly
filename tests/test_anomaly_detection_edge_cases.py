@@ -28,7 +28,7 @@ class TestEmptyDataEdgeCases:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame()
         actual_df = pd.DataFrame({
@@ -36,9 +36,12 @@ class TestEmptyDataEdgeCases:
             'platform': ['desktop'],
             'sessions': [100]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
         with pytest.raises(ValueError, match="Forecast DataFrame is empty"):
-            detector.detect(forecast_df, actual_df)
+            detector.detect(forecast_df, actual_pivoted)
 
     def test_empty_actual_dataframe(self):
         """Test that empty actual DataFrame raises ValueError."""
@@ -47,25 +50,23 @@ class TestEmptyDataEdgeCases:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
             'desktop': ['100|90|92|95|98|100|102|105|108|110']
         })
         actual_df = pd.DataFrame()
+        
+        # Pivot actual data - will still be empty
+        actual_pivoted = transformer(actual_df) if not actual_df.empty else actual_df
 
         with pytest.raises(ValueError, match="Actual DataFrame is empty"):
-            detector.detect(forecast_df, actual_df)
+            detector.detect(forecast_df, actual_pivoted)
 
     def test_both_dataframes_empty(self):
         """Test that both empty DataFrames raise ValueError."""
-        transformer = PivotTransformer(
-            index='date',
-            columns=['platform'],
-            values='sessions'
-        )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame()
         actual_df = pd.DataFrame()
@@ -84,7 +85,7 @@ class TestTypeValidation:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_dict = {'date': [datetime(2024, 1, 1)]}
         actual_df = pd.DataFrame({
@@ -92,18 +93,16 @@ class TestTypeValidation:
             'platform': ['desktop'],
             'sessions': [100]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
         with pytest.raises(TypeError, match="Expected DataFrame for forecast_df"):
-            detector.detect(forecast_dict, actual_df)
+            detector.detect(forecast_dict, actual_pivoted)
 
     def test_actual_not_dataframe(self):
         """Test that non-DataFrame actual raises TypeError."""
-        transformer = PivotTransformer(
-            index='date',
-            columns=['platform'],
-            values='sessions'
-        )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -125,7 +124,7 @@ class TestInvalidQuantileFormat:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -136,10 +135,13 @@ class TestInvalidQuantileFormat:
             'platform': ['desktop'],
             'sessions': [95]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
         # Should warn about incomplete quantiles and use available values
         with pytest.warns(UserWarning, match="Expected 10 quantiles"):
-            result = detector.detect(forecast_df, actual_df)
+            result = detector.detect(forecast_df, actual_pivoted)
             assert len(result) == 1
             # Since q90 defaults to 0.0, actual (95) will be ABOVE_UPPER
             assert result.iloc[0]['status'] == 'ABOVE_UPPER'
@@ -151,7 +153,7 @@ class TestInvalidQuantileFormat:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -162,8 +164,11 @@ class TestInvalidQuantileFormat:
             'platform': ['desktop'],
             'sessions': [95]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         assert len(result) == 1
         # Should handle the error gracefully and return NO_FORECAST
         assert result.iloc[0]['status'] == 'NO_FORECAST'
@@ -175,7 +180,7 @@ class TestInvalidQuantileFormat:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -186,8 +191,11 @@ class TestInvalidQuantileFormat:
             'platform': ['desktop'],
             'sessions': [95]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         assert len(result) == 1
         assert result.iloc[0]['status'] == 'NO_FORECAST'
 
@@ -202,7 +210,7 @@ class TestDivisionByZeroEdgeCases:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -213,8 +221,11 @@ class TestDivisionByZeroEdgeCases:
             'platform': ['desktop'],
             'sessions': [100]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         assert len(result) == 1
         assert result.iloc[0]['status'] == 'NO_FORECAST'
         assert result.iloc[0]['deviation_pct'] == 0.0
@@ -226,7 +237,7 @@ class TestDivisionByZeroEdgeCases:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -237,8 +248,11 @@ class TestDivisionByZeroEdgeCases:
             'platform': ['desktop'],
             'sessions': [-5]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         assert len(result) == 1
         assert result.iloc[0]['status'] == 'BELOW_LOWER'
         # Deviation should be calculated as abs(actual) when lower_bound is 0
@@ -251,7 +265,7 @@ class TestDivisionByZeroEdgeCases:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -262,8 +276,11 @@ class TestDivisionByZeroEdgeCases:
             'platform': ['desktop'],
             'sessions': [50]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         assert len(result) == 1
         # Should be NO_FORECAST since all values are zero
         assert result.iloc[0]['status'] == 'NO_FORECAST'
@@ -279,7 +296,7 @@ class TestAllZeroValues:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -290,8 +307,11 @@ class TestAllZeroValues:
             'platform': ['desktop'],
             'sessions': [0]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         assert len(result) == 1
         assert result.iloc[0]['status'] == 'NO_FORECAST'
         assert result.iloc[0]['actual'] == 0
@@ -308,7 +328,7 @@ class TestNegativeValues:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -319,8 +339,11 @@ class TestNegativeValues:
             'platform': ['desktop'],
             'sessions': [-10]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         assert len(result) == 1
         assert result.iloc[0]['status'] == 'BELOW_LOWER'
         assert result.iloc[0]['actual'] == -10
@@ -336,7 +359,7 @@ class TestMismatchedDateRanges:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1)],
@@ -347,8 +370,11 @@ class TestMismatchedDateRanges:
             'platform': ['desktop'],
             'sessions': [95]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         # Should return empty or handle gracefully
         assert len(result) >= 0
 
@@ -359,7 +385,7 @@ class TestMismatchedDateRanges:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         forecast_df = pd.DataFrame({
             'date': [datetime(2024, 1, 1), datetime(2024, 1, 2)],
@@ -371,8 +397,11 @@ class TestMismatchedDateRanges:
             'platform': ['desktop', 'desktop'],
             'sessions': [105, 115]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         # Should only compare overlapping dates
         assert len(result) >= 0
 
@@ -387,7 +416,7 @@ class TestDuplicateMetrics:
             columns=['platform'],
             values='sessions'
         )
-        detector = ForecastActualComparator(transformer=transformer)
+        detector = ForecastActualComparator()
 
         # This shouldn't normally happen, but test graceful handling
         forecast_df = pd.DataFrame({
@@ -399,9 +428,12 @@ class TestDuplicateMetrics:
             'platform': ['desktop', 'desktop'],
             'sessions': [95, 96]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
         # Should handle duplicate entries
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         assert len(result) >= 0
 
 
@@ -416,7 +448,6 @@ class TestDimensionExtraction:
             values='sessions'
         )
         detector = ForecastActualComparator(
-            transformer=transformer,
             dimension_names=['platform', 'channel']
         )
 
@@ -430,29 +461,31 @@ class TestDimensionExtraction:
             'channel': ['organic'],
             'sessions': [95]
         })
+        
+        # Pivot actual data before passing to detector
+        actual_pivoted = transformer(actual_df)
 
-        result = detector.detect(forecast_df, actual_df)
+        result = detector.detect(forecast_df, actual_pivoted)
         assert len(result) == 1
         assert 'platform' in result.columns
         assert 'channel' in result.columns
         assert result.iloc[0]['platform'] == 'desktop'
         assert result.iloc[0]['channel'] == 'organic'
-        assert 'metric' not in result.columns
+        # Metric column is still present - it's just split into dimensions, not removed
+        assert 'metric' in result.columns
+        assert result.iloc[0]['metric'] == 'desktop_organic'
 
     def test_dimension_names_validation(self):
-        """Test that dimension_names validation works correctly."""
-        transformer = PivotTransformer(
-            index='date',
-            columns=['platform', 'channel'],
-            values='sessions'
+        """Test that dimension_names can be used independently."""
+        # Note: dimension_names validation against transformer.columns was removed
+        # since transformer parameter no longer exists. This test now verifies
+        # that dimension_names works correctly on its own.
+        detector = ForecastActualComparator(
+            dimension_names=['platform', 'channel']
         )
-
-        # Mismatched dimension names should raise ValueError
-        with pytest.raises(ValueError, match="dimension_names must match transformer.columns"):
-            ForecastActualComparator(
-                transformer=transformer,
-                dimension_names=['channel', 'platform']  # Wrong order
-            )
+        
+        # Verify detector was created successfully
+        assert detector.dimension_names == ['platform', 'channel']
 
 
 @pytest.mark.skip(reason="Filtering features should be tested with separate Filter classes, not Detector")

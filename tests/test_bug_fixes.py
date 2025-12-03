@@ -253,15 +253,12 @@ class TestBug012WorkflowDataValidation:
 
     def test_empty_after_transform_raises_error(self):
         """
-        BUG-012: Test that empty DataFrame after transformation raises ValueError.
+        BUG-012: Test that empty DataFrame from reader raises ValueError.
+        Note: Transformers are now configured at component level, not workflow level.
         """
+        # Reader returns empty DataFrame (simulating empty result after transformation)
         mock_reader = Mock()
-        mock_reader.load.return_value = pd.DataFrame({
-            'a': [1, 2, 3]
-        })
-
-        mock_transformer = Mock()
-        mock_transformer.pivot_table.return_value = pd.DataFrame()  # Empty after transform
+        mock_reader.load.return_value = pd.DataFrame()  # Empty after transform
 
         mock_forecaster = Mock()
         mock_writer = Mock()
@@ -269,11 +266,10 @@ class TestBug012WorkflowDataValidation:
         workflow = ForecastWorkflow(
             data_reader=mock_reader,
             forecaster=mock_forecaster,
-            data_writer=mock_writer,
-            transformer=mock_transformer
+            data_writer=mock_writer
         )
 
-        with pytest.raises(ValueError, match="Transformer returned empty dataset"):
+        with pytest.raises(ValueError, match="Data reader returned empty dataset"):
             workflow.run(horizon=10)
 
 
