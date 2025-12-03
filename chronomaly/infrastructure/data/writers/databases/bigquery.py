@@ -2,6 +2,8 @@
 BigQuery data writer implementation.
 """
 
+import os
+
 import pandas as pd
 from typing import Optional, Dict, List, Callable
 from google.cloud import bigquery
@@ -56,6 +58,32 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
                 f"Invalid write_disposition: '{write_disposition}'. "
                 f"Must be one of: {', '.join(sorted(self.VALID_WRITE_DISPOSITIONS))}"
             )
+
+        # PY-007 FIX: Validate service account file path
+        if service_account_file:
+            if not service_account_file.strip():
+                raise ValueError("service_account_file cannot be empty")
+
+            # Resolve to absolute path and check if it exists
+            abs_path = os.path.abspath(service_account_file)
+            if not os.path.isfile(abs_path):
+                raise FileNotFoundError(
+                    f"Service account file not found: {abs_path}"
+                )
+
+            # Check file is readable
+            if not os.access(abs_path, os.R_OK):
+                raise PermissionError(
+                    f"Service account file is not readable: {abs_path}"
+                )
+
+            # Basic validation that it's a JSON file
+            if not abs_path.endswith('.json'):
+                raise ValueError(
+                    "Service account file must be a JSON file (.json extension)"
+                )
+
+            service_account_file = abs_path
 
         self.service_account_file = service_account_file
         self.project = project
