@@ -129,7 +129,7 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
                 "Please ensure data is pivoted with metric columns."
             )
 
-    def _prepare_data(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame):
+    def _prepare_data(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
         # Assume actual_df is already pivoted (use PivotTransformer outside if needed)
         actual_pivot = actual_df.reset_index() if isinstance(actual_df.index, pd.DatetimeIndex) else actual_df.copy()
         forecast_cols = set(forecast_df.columns) - set(self.exclude_columns)
@@ -152,7 +152,7 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
 
         return df
 
-    def _compare_all_metrics(self, forecast_std: pd.DataFrame, actual_std: pd.DataFrame, all_columns: list):
+    def _compare_all_metrics(self, forecast_std: pd.DataFrame, actual_std: pd.DataFrame, all_columns: list[str]) -> list[dict]:
         results = []
         for idx in forecast_std.index:
             date_value = forecast_std.loc[idx, self.date_column] if self.date_column in forecast_std.columns else None
@@ -168,7 +168,7 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
 
         return results
 
-    def _compare_metric(self, column: str, forecast_value: str, actual_value: float, date_value: Optional[pd.Timestamp] = None):
+    def _compare_metric(self, column: str, forecast_value: str, actual_value: float, date_value: Optional[pd.Timestamp] = None) -> dict:
         forecast_parts = str(forecast_value).split('|')
 
         try:
