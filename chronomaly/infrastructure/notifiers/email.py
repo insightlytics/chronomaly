@@ -3,6 +3,8 @@ Email notifier implementation.
 """
 
 import smtplib
+import re
+from datetime import datetime
 import pandas as pd
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -19,10 +21,15 @@ class EmailNotifier(Notifier, TransformableMixin):
     Optionally includes line charts for anomalous metrics when chart_data_reader is provided.
     Supports multiple recipients and filtering via transformers.
 
-    SMTP credentials and email subject are configured within the code.
+    SMTP credentials are read from environment variables.
+    Email subject can be customized with support for date formatting.
 
     Args:
         to: Recipient email address(es). Can be a single email or list of emails.
+        subject: Optional custom email subject. Supports date template variables:
+                - {date} - Date from anomaly data in YYYY-MM-DD format
+                - {date:FORMAT} - Anomaly date with custom strftime format
+                If not specified, defaults to "Anomaly Detection Alert".
         transformers: Optional transformers to apply before notification
                      Example: {'before': [ValueFilter(...)]} to filter anomalies
         chart_data_reader: Optional DataReader for loading historical time series data.
@@ -36,9 +43,21 @@ class EmailNotifier(Notifier, TransformableMixin):
         from chronomaly.infrastructure.data.readers import BigQueryDataReader
         from chronomaly.infrastructure.transformers import PivotTransformer
 
-        # Basic usage
+        # Basic usage with default subject
         notifier = EmailNotifier(
             to=["team@example.com", "manager@example.com"]
+        )
+
+        # Custom subject with anomaly date
+        notifier = EmailNotifier(
+            to=["team@example.com"],
+            subject="Daily Anomaly Report - {date}"
+        )
+
+        # Custom subject with formatted anomaly date
+        notifier = EmailNotifier(
+            to=["team@example.com"],
+            subject="Anomalies for {date:%d %B %Y}"
         )
 
         # With filtering - only notify for significant anomalies
@@ -90,8 +109,8 @@ class EmailNotifier(Notifier, TransformableMixin):
         notifier.notify(payload)
 
     Note:
-        SMTP configuration and email subject are hardcoded in the class.
-        Update _get_smtp_config() and _get_email_subject() methods to change settings.
+        SMTP configuration is read from environment variables.
+        Email subject can be customized via the subject parameter.
 
         For charts to work correctly, metric names in anomalies_df['metric'] must
         exactly match column names in the pivoted chart data.
@@ -100,6 +119,7 @@ class EmailNotifier(Notifier, TransformableMixin):
     def __init__(
         self,
         to: List[str] | str,
+        subject: Optional[str] = None,
         transformers: Optional[Dict[str, List[Callable]]] = None,
         chart_data_reader: Optional[Any] = None
     ):
@@ -117,6 +137,7 @@ class EmailNotifier(Notifier, TransformableMixin):
 
         self.transformers = transformers or {}
         self.chart_data_reader = chart_data_reader
+        self._subject_template = subject
 
         # Get SMTP configuration from internal method
         smtp_config = self._get_smtp_config()
@@ -126,9 +147,6 @@ class EmailNotifier(Notifier, TransformableMixin):
         self.smtp_password = smtp_config['password']
         self.from_email = smtp_config['from_email']
         self.use_tls = smtp_config['use_tls']
-
-        # Get email subject
-        self.subject = self._get_email_subject()
 
     def _get_smtp_config(self) -> Dict[str, Any]:
         """
@@ -159,16 +177,51 @@ class EmailNotifier(Notifier, TransformableMixin):
             'use_tls': os.getenv('SMTP_USE_TLS', 'True').lower() in ('true', '1', 'yes')
         }
 
-    def _get_email_subject(self) -> str:
+    def _get_email_subject(self, anomaly_date: Optional[datetime] = None) -> str:
         """
-        Get email subject line.
+        Get email subject line with processed date templates.
 
-        Update this value to change the email subject.
+        Processes template variables in the subject:
+        - {date} -> Date from anomaly data in YYYY-MM-DD format
+        - {date:FORMAT} -> Anomaly date with custom strftime format
+
+        Args:
+            anomaly_date: Optional datetime extracted from anomaly data
 
         Returns:
-            str: Email subject line
+            str: Processed email subject line
+
+        Examples:
+            Template: "Daily Report - {date}"
+            Result: "Daily Report - 2025-12-02"
+
+            Template: "Report {date:%d.%m.%Y}"
+            Result: "Report 02.12.2025"
         """
-        return "Anomaly Detection Alert"
+        # Use default subject if not specified
+        subject = self._subject_template or "Anomaly Detection Alert"
+
+        # Replace {date} placeholders if anomaly_date is provided
+        if anomaly_date is not None:
+            # Replace {date:FORMAT} placeholders with custom format
+            date_format_pattern = r'\{date:([^}]+)\}'
+            matches = re.finditer(date_format_pattern, subject)
+            for match in matches:
+                format_string = match.group(1)
+                try:
+                    formatted_date = anomaly_date.strftime(format_string)
+                    subject = subject.replace(match.group(0), formatted_date)
+                except (ValueError, TypeError) as e:
+                    import warnings
+                    warnings.warn(
+                        f"Invalid date format '{format_string}' in email subject. "
+                        f"Error: {str(e)}"
+                    )
+
+            # Replace simple {date} placeholder (must be done after custom formats)
+            subject = subject.replace('{date}', anomaly_date.strftime('%Y-%m-%d'))
+
+        return subject
 
     def _create_line_chart(self, metric_name: str, data: pd.Series) -> str:
         """
@@ -279,6 +332,23 @@ class EmailNotifier(Notifier, TransformableMixin):
             raise TypeError(
                 f"'anomalies' must be a DataFrame, got {type(anomalies_df).__name__}"
             )
+
+        # Extract anomaly date from the DataFrame if a 'date' column exists
+        anomaly_date = None
+        if 'date' in anomalies_df.columns:
+            try:
+                # Try to get the most recent (max) date from the data
+                date_series = pd.to_datetime(anomalies_df['date'])
+                anomaly_date = date_series.max()
+                # Convert to Python datetime if it's a Timestamp
+                if hasattr(anomaly_date, 'to_pydatetime'):
+                    anomaly_date = anomaly_date.to_pydatetime()
+            except Exception:
+                # If date extraction fails, continue without it
+                anomaly_date = None
+
+        # Store anomaly_date for use in _send_email
+        self._current_anomaly_date = anomaly_date
 
         # Generate charts BEFORE applying transformers (need metric column)
         # Charts are generated using original anomalies_df with all columns
@@ -502,7 +572,7 @@ class EmailNotifier(Notifier, TransformableMixin):
         try:
             # Create message
             msg = MIMEMultipart('alternative')
-            msg['Subject'] = self.subject
+            msg['Subject'] = self._get_email_subject(getattr(self, '_current_anomaly_date', None))
             msg['From'] = self.from_email
             msg['To'] = ', '.join(self.to)
 
