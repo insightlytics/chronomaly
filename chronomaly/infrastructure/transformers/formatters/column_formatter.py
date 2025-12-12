@@ -59,7 +59,7 @@ class ColumnFormatter(DataFrameFormatter):
         cls,
         columns: Union[str, List[str]],
         decimal_places: int = 1,
-        multiply_by_100: bool = False
+        multiply_by_100: bool = False,
     ):
         """
         Helper method to create percentage formatter.
@@ -77,7 +77,9 @@ class ColumnFormatter(DataFrameFormatter):
             formatted = formatter.format(df)
         """
         if decimal_places < 0:
-            raise ValueError(f"decimal_places must be non-negative, got {decimal_places}")
+            raise ValueError(
+                f"decimal_places must be non-negative, got {decimal_places}"
+            )
 
         column_list = [columns] if isinstance(columns, str) else columns
 

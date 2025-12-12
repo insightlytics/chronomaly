@@ -43,7 +43,7 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
 
     def __init__(
         self,
-        model_name: str = 'google/timesfm-2.5-200m-pytorch',
+        model_name: str = "google/timesfm-2.5-200m-pytorch",
         max_context: int = 1024,
         max_horizon: int = 256,
         normalize_inputs: bool = True,
@@ -51,9 +51,9 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
         force_flip_invariance: bool = True,
         infer_is_positive: bool = True,
         fix_quantile_crossing: bool = True,
-        frequency: str = 'D',
+        frequency: str = "D",
         transformers: Optional[Dict[str, List[Callable]]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         self.model_name: str = model_name
         self.max_horizon: int = max_horizon  # Store for validation
@@ -67,7 +67,7 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
             force_flip_invariance=force_flip_invariance,
             infer_is_positive=infer_is_positive,
             fix_quantile_crossing=fix_quantile_crossing,
-            **kwargs
+            **kwargs,
         )
         self._model: Any | None = None
 
@@ -79,7 +79,7 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
             Compiled TimesFM model
         """
         if self._model is None:
-            torch.set_float32_matmul_precision('high')
+            torch.set_float32_matmul_precision("high")
 
             self._model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(
                 self.model_name
@@ -88,12 +88,8 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
 
         return self._model
 
-
     def forecast(
-        self,
-        dataframe: pd.DataFrame,
-        horizon: int,
-        return_point: bool = False
+        self, dataframe: pd.DataFrame, horizon: int, return_point: bool = False
     ) -> pd.DataFrame:
         """
         Generate forecast using TimesFM model.
@@ -137,7 +133,7 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
             )
 
         # Apply transformers before forecasting (on input data)
-        dataframe = self._apply_transformers(dataframe, 'before')
+        dataframe = self._apply_transformers(dataframe, "before")
 
         model = self._get_model()
 
@@ -147,13 +143,10 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
         # Generate forecasts
         try:
             forecast_point, forecast_quantile = model.forecast(
-                horizon=horizon,
-                inputs=inputs
+                horizon=horizon, inputs=inputs
             )
         except Exception as e:
-            raise RuntimeError(
-                f"TimesFM forecast failed: {str(e)}"
-            ) from e
+            raise RuntimeError(f"TimesFM forecast failed: {str(e)}") from e
 
         if return_point:
             # Return point forecasts
@@ -167,7 +160,7 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
             )
 
         # Apply transformers after forecasting
-        forecast_df = self._apply_transformers(forecast_df, 'after')
+        forecast_df = self._apply_transformers(forecast_df, "after")
 
         return forecast_df
 
@@ -230,10 +223,7 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
             )
 
     def _format_point_forecast(
-        self,
-        forecast_point: np.ndarray,
-        dataframe: pd.DataFrame,
-        horizon: int
+        self, forecast_point: np.ndarray, dataframe: pd.DataFrame, horizon: int
     ) -> pd.DataFrame:
         """
         Format point forecast results.
@@ -253,40 +243,32 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
         last_date = self._get_last_date(dataframe)
 
         # Calculate the appropriate offset based on frequency
-        if self.frequency == 'D':
+        if self.frequency == "D":
             start_date = last_date + pd.Timedelta(days=1)
-        elif self.frequency == 'H':
+        elif self.frequency == "H":
             start_date = last_date + pd.Timedelta(hours=1)
-        elif self.frequency == 'W':
+        elif self.frequency == "W":
             start_date = last_date + pd.Timedelta(weeks=1)
-        elif self.frequency == 'M':
+        elif self.frequency == "M":
             start_date = last_date + pd.DateOffset(months=1)
         else:
             # For other frequencies, use pd.date_range to calculate offset
             start_date = last_date + pd.tseries.frequencies.to_offset(self.frequency)
 
         new_index = pd.date_range(
-            start=start_date,
-            periods=horizon,
-            freq=self.frequency
+            start=start_date, periods=horizon, freq=self.frequency
         )
 
         # Create forecast dataframe
-        dataframe_forecast = pd.DataFrame(
-            forecast_data,
-            columns=dataframe.columns
-        )
+        dataframe_forecast = pd.DataFrame(forecast_data, columns=dataframe.columns)
         dataframe_forecast.columns.name = None
         dataframe_forecast.insert(0, "date", new_index)
-        dataframe_forecast['date'] = dataframe_forecast['date'].dt.date
+        dataframe_forecast["date"] = dataframe_forecast["date"].dt.date
 
         return dataframe_forecast
 
     def _format_quantile_forecast(
-        self,
-        forecast_quantile: np.ndarray,
-        dataframe: pd.DataFrame,
-        horizon: int
+        self, forecast_quantile: np.ndarray, dataframe: pd.DataFrame, horizon: int
     ) -> pd.DataFrame:
         """
         Format quantile forecast results.
@@ -304,7 +286,7 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
         (
             forecast_quantile_items,
             forecast_quantile_horizons,
-            forecast_quantile_quantiles
+            forecast_quantile_quantiles,
         ) = forecast_quantile.shape
 
         # Format quantiles as pipe-separated strings
@@ -315,11 +297,12 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
 
             for forecast_quantile_horizon in range(forecast_quantile_horizons):
                 cell_value = "|".join(
-                    map(str, forecast_quantile[
-                        forecast_quantile_item,
-                        forecast_quantile_horizon,
-                        :
-                    ])
+                    map(
+                        str,
+                        forecast_quantile[
+                            forecast_quantile_item, forecast_quantile_horizon, :
+                        ],
+                    )
                 )
                 forecast_data_row.append(cell_value)
 
@@ -332,30 +315,25 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
         last_date = self._get_last_date(dataframe)
 
         # Calculate the appropriate offset based on frequency
-        if self.frequency == 'D':
+        if self.frequency == "D":
             start_date = last_date + pd.Timedelta(days=1)
-        elif self.frequency == 'H':
+        elif self.frequency == "H":
             start_date = last_date + pd.Timedelta(hours=1)
-        elif self.frequency == 'W':
+        elif self.frequency == "W":
             start_date = last_date + pd.Timedelta(weeks=1)
-        elif self.frequency == 'M':
+        elif self.frequency == "M":
             start_date = last_date + pd.DateOffset(months=1)
         else:
             start_date = last_date + pd.tseries.frequencies.to_offset(self.frequency)
 
         new_index = pd.date_range(
-            start=start_date,
-            periods=forecast_quantile_horizons,
-            freq=self.frequency
+            start=start_date, periods=forecast_quantile_horizons, freq=self.frequency
         )
 
         # Create forecast dataframe
-        dataframe_forecast = pd.DataFrame(
-            forecast_data,
-            columns=dataframe.columns
-        )
+        dataframe_forecast = pd.DataFrame(forecast_data, columns=dataframe.columns)
         dataframe_forecast.columns.name = None
         dataframe_forecast.insert(0, "date", new_index)
-        dataframe_forecast['date'] = dataframe_forecast['date'].dt.date
+        dataframe_forecast["date"] = dataframe_forecast["date"].dt.date
 
         return dataframe_forecast

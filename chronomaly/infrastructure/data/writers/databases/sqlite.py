@@ -34,9 +34,9 @@ class SQLiteDataWriter(DataWriter, TransformableMixin):
         self,
         database_path: str,
         table_name: str,
-        if_exists: str = 'replace',
+        if_exists: str = "replace",
         transformers: Optional[Dict[str, List[Callable]]] = None,
-        **kwargs
+        **kwargs,
     ):
         # BUG-20 FIX: Validate database path to prevent path traversal
         if not database_path:
@@ -48,15 +48,11 @@ class SQLiteDataWriter(DataWriter, TransformableMixin):
         # Ensure parent directory exists or can be created
         parent_dir = os.path.dirname(abs_path)
         if not os.path.exists(parent_dir):
-            raise FileNotFoundError(
-                f"Parent directory does not exist: {parent_dir}"
-            )
+            raise FileNotFoundError(f"Parent directory does not exist: {parent_dir}")
 
         # Check if parent directory is writable
         if not os.access(parent_dir, os.W_OK):
-            raise PermissionError(
-                f"Parent directory is not writable: {parent_dir}"
-            )
+            raise PermissionError(f"Parent directory is not writable: {parent_dir}")
 
         self.database_path = abs_path
 
@@ -65,23 +61,29 @@ class SQLiteDataWriter(DataWriter, TransformableMixin):
             raise ValueError("table_name cannot be empty")
 
         # Only allow alphanumeric characters and underscores
-        if not re.match(r'^[a-zA-Z0-9_]+$', table_name):
+        if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
             raise ValueError(
                 f"Invalid table_name: '{table_name}'. "
                 "Only alphanumeric characters and underscores are allowed."
             )
 
         # Don't allow names that look like SQL keywords
-        sql_keywords = {'select', 'insert', 'update', 'delete', 'drop', 'create', 'alter'}
+        sql_keywords = {
+            "select",
+            "insert",
+            "update",
+            "delete",
+            "drop",
+            "create",
+            "alter",
+        }
         if table_name.lower() in sql_keywords:
-            raise ValueError(
-                f"table_name cannot be a SQL keyword: '{table_name}'"
-            )
+            raise ValueError(f"table_name cannot be a SQL keyword: '{table_name}'")
 
         self.table_name = table_name
 
         # BUG-27 FIX: Validate if_exists parameter
-        valid_if_exists = ['fail', 'replace', 'append']
+        valid_if_exists = ["fail", "replace", "append"]
         if if_exists not in valid_if_exists:
             raise ValueError(
                 f"Invalid if_exists value: '{if_exists}'. "
@@ -91,7 +93,6 @@ class SQLiteDataWriter(DataWriter, TransformableMixin):
         self.if_exists = if_exists
         self.transformers = transformers or {}
         self.to_sql_kwargs = kwargs
-
 
     def write(self, dataframe: pd.DataFrame) -> None:
         """
@@ -105,7 +106,7 @@ class SQLiteDataWriter(DataWriter, TransformableMixin):
             RuntimeError: If database write operation fails
         """
         # Apply transformers before writing data
-        dataframe = self._apply_transformers(dataframe, 'before')
+        dataframe = self._apply_transformers(dataframe, "before")
 
         # BUG-44 FIX: Validate dataframe type
         if not isinstance(dataframe, pd.DataFrame):
@@ -126,7 +127,7 @@ class SQLiteDataWriter(DataWriter, TransformableMixin):
                 con=conn,
                 if_exists=self.if_exists,
                 index=False,
-                **self.to_sql_kwargs
+                **self.to_sql_kwargs,
             )
 
         except sqlite3.Error as e:

@@ -3,7 +3,6 @@ Shared mixins for common functionality.
 """
 
 import pandas as pd
-from typing import Dict, List, Callable
 
 
 class TransformableMixin:
@@ -37,7 +36,7 @@ class TransformableMixin:
         Raises:
             TypeError: If transformer doesn't have proper interface
         """
-        if not hasattr(self, 'transformers'):
+        if not hasattr(self, "transformers"):
             return df
 
         if stage not in self.transformers:
@@ -46,18 +45,18 @@ class TransformableMixin:
         result = df
         for transformer in self.transformers[stage]:
             # Support .filter() method (for filters)
-            if hasattr(transformer, 'filter'):
+            if hasattr(transformer, "filter"):
                 result = transformer.filter(result)
             # Support .format() method (for formatters)
-            elif hasattr(transformer, 'format'):
+            elif hasattr(transformer, "format"):
                 result = transformer.format(result)
             # Support callable objects (for any transformer)
             elif callable(transformer):
                 result = transformer(result)
             else:
                 raise TypeError(
-                    f"Transformer must have .filter(), .format() method or be callable. "
-                    f"Got: {type(transformer).__name__}"
+                    f"Transformer must have .filter(), .format() method or "
+                    f"be callable. Got: {type(transformer).__name__}"
                 )
 
         return result

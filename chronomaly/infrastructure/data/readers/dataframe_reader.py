@@ -20,31 +20,21 @@ class DataFrameDataReader(DataReader, TransformableMixin):
         transformers: Optional dict of transformer lists to apply after loading data
                      Example: {'after': [Filter1(), Filter2()]}
                      Note: 'before' stage not supported for readers
-
-    Example:
-        from chronomaly.infrastructure.data.readers import DataFrameDataReader
-
-        # You already have a DataFrame (e.g., from anomaly detection)
-        anomalies_df = anomaly_workflow.run()
-
-        # Wrap it in a DataReader
-        reader = DataFrameDataReader(dataframe=anomalies_df)
-
-        # Use it like any other DataReader
-        df = reader.load()
     """
 
     def __init__(
         self,
         dataframe: pd.DataFrame,
-        transformers: Optional[Dict[str, List[Callable]]] = None
+        transformers: Optional[Dict[str, List[Callable]]] = None,
     ):
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError(
                 f"Expected pandas DataFrame, got {type(dataframe).__name__}"
             )
 
-        self._dataframe: pd.DataFrame = dataframe.copy()  # Store a copy to avoid mutations
+        self._dataframe: pd.DataFrame = (
+            dataframe.copy()
+        )  # Store a copy to avoid mutations
         self.transformers: dict[str, list[Callable]] = transformers or {}
 
     def load(self) -> pd.DataFrame:
@@ -56,5 +46,5 @@ class DataFrameDataReader(DataReader, TransformableMixin):
         """
         # Return a copy and apply transformers
         df = self._dataframe.copy()
-        df = self._apply_transformers(df, 'after')
+        df = self._apply_transformers(df, "after")
         return df

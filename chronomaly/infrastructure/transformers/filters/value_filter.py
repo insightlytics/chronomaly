@@ -49,19 +49,25 @@ class ValueFilter(DataFrameFilter):
         self,
         column: str,
         values: Optional[Union[Any, List[Any]]] = None,
-        mode: str = 'include',
+        mode: str = "include",
         min_value: Optional[float] = None,
-        max_value: Optional[float] = None
+        max_value: Optional[float] = None,
     ):
         # Validate inputs
         if values is None and min_value is None and max_value is None:
-            raise ValueError("At least one of 'values', 'min_value', or 'max_value' must be specified")
+            raise ValueError(
+                "At least one of 'values', 'min_value', or 'max_value' must be specified"
+            )
 
-        if mode not in ['include', 'exclude']:
+        if mode not in ["include", "exclude"]:
             raise ValueError(f"mode must be 'include' or 'exclude', got {mode}")
 
         self.column: str = column
-        self.values: list[Any] | None = values if values is None else (values if isinstance(values, list) else [values])
+        self.values: list[Any] | None = (
+            values
+            if values is None
+            else (values if isinstance(values, list) else [values])
+        )
         self.mode: str = mode
         self.min_value: float | None = min_value
         self.max_value: float | None = max_value
@@ -83,7 +89,7 @@ class ValueFilter(DataFrameFilter):
 
         # Apply categorical filter (if values specified)
         if self.values is not None:
-            if self.mode == 'include':
+            if self.mode == "include":
                 result = result[result[self.column].isin(self.values)]
             else:  # exclude
                 result = result[~result[self.column].isin(self.values)]

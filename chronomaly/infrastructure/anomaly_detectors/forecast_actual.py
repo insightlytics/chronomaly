@@ -4,7 +4,6 @@ Forecast vs Actual anomaly detection implementation.
 
 import warnings
 import pandas as pd
-import numpy as np
 from typing import Optional, List, Dict, Callable
 from .base import AnomalyDetector
 from chronomaly.shared import TransformableMixin
@@ -36,12 +35,12 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
 
     def __init__(
         self,
-        date_column: str = 'date',
+        date_column: str = "date",
         exclude_columns: Optional[List[str]] = None,
         dimension_names: Optional[List[str]] = None,
         lower_quantile_idx: int = 1,
         upper_quantile_idx: int = 9,
-        transformers: Optional[Dict[str, List[Callable]]] = None
+        transformers: Optional[Dict[str, List[Callable]]] = None,
     ):
         self.date_column: str = date_column
         self.exclude_columns: list[str] = exclude_columns or [date_column]
@@ -50,11 +49,14 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         self.upper_quantile_idx: int = upper_quantile_idx
         self.transformers: dict[str, list[Callable]] = transformers or {}
 
-
-    def detect(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame) -> pd.DataFrame:
+    def detect(
+        self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame
+    ) -> pd.DataFrame:
         """Detect anomalies by comparing forecast quantiles with actual values."""
         self._validate_inputs(forecast_df, actual_df)
-        forecast_std, actual_std, all_columns = self._prepare_data(forecast_df, actual_df)
+        forecast_std, actual_std, all_columns = self._prepare_data(
+            forecast_df, actual_df
+        )
         results = self._compare_all_metrics(forecast_std, actual_std, all_columns)
 
         if not results:
@@ -66,7 +68,7 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
             result_df = self._split_metric_to_dimensions(result_df)
 
         # Apply transformers after detection
-        result_df = self._apply_transformers(result_df, 'after')
+        result_df = self._apply_transformers(result_df, "after")
 
         return result_df
 
@@ -83,9 +85,13 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
             ValueError: If DataFrames are empty or actual_df is not pivoted
         """
         if not isinstance(forecast_df, pd.DataFrame):
-            raise TypeError(f"Expected DataFrame for forecast_df, got {type(forecast_df).__name__}")
+            raise TypeError(
+                f"Expected DataFrame for forecast_df, got {type(forecast_df).__name__}"
+            )
         if not isinstance(actual_df, pd.DataFrame):
-            raise TypeError(f"Expected DataFrame for actual_df, got {type(actual_df).__name__}")
+            raise TypeError(
+                f"Expected DataFrame for actual_df, got {type(actual_df).__name__}"
+            )
         if forecast_df.empty:
             raise ValueError("Forecast DataFrame is empty")
         if actual_df.empty:
@@ -110,7 +116,7 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
             ValueError: If DataFrame appears to be in long format instead of pivoted
         """
         # Check for common long-format column names
-        long_format_indicators = ['metric', 'metric_name', 'value', 'values', 'measure']
+        long_format_indicators = ["metric", "metric_name", "value", "values", "measure"]
         df_columns_lower = [col.lower() for col in df.columns]
 
         for indicator in long_format_indicators:
@@ -122,40 +128,63 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
                 )
 
         # Check that we have more than just the date column
-        non_date_columns = [col for col in df.columns if col not in self.exclude_columns]
+        non_date_columns = [
+            col for col in df.columns if col not in self.exclude_columns
+        ]
         if len(non_date_columns) == 0:
             raise ValueError(
                 "actual_df has no metric columns (only date column found). "
                 "Please ensure data is pivoted with metric columns."
             )
 
-    def _prepare_data(self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    def _prepare_data(
+        self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame
+    ) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
         # Assume actual_df is already pivoted (use PivotTransformer outside if needed)
-        actual_pivot = actual_df.reset_index() if isinstance(actual_df.index, pd.DatetimeIndex) else actual_df.copy()
+        actual_pivot = (
+            actual_df.reset_index()
+            if isinstance(actual_df.index, pd.DatetimeIndex)
+            else actual_df.copy()
+        )
         forecast_cols = set(forecast_df.columns) - set(self.exclude_columns)
         actual_cols = set(actual_pivot.columns) - set(self.exclude_columns)
         all_columns = sorted(forecast_cols.union(actual_cols))
 
-        forecast_std = self._standardize_columns(forecast_df.copy(), all_columns, '0|0|0|0|0|0|0|0|0|0')
+        forecast_std = self._standardize_columns(
+            forecast_df.copy(), all_columns, "0|0|0|0|0|0|0|0|0|0"
+        )
         actual_std = self._standardize_columns(actual_pivot.copy(), all_columns, 0.0)
 
         return forecast_std, actual_std, all_columns
 
-    def _standardize_columns(self, df: pd.DataFrame, column_list: List[str], fill_value: float) -> pd.DataFrame:
+    def _standardize_columns(
+        self, df: pd.DataFrame, column_list: List[str], fill_value: float
+    ) -> pd.DataFrame:
         missing_columns = [col for col in column_list if col not in df.columns]
         if missing_columns:
-            new_cols_df = pd.DataFrame(fill_value, index=df.index, columns=missing_columns)
+            new_cols_df = pd.DataFrame(
+                fill_value, index=df.index, columns=missing_columns
+            )
             df = pd.concat([df, new_cols_df], axis=1)
 
         for column in column_list:
-            df[column] = df[column].fillna(fill_value).replace('None', fill_value)
+            df[column] = df[column].fillna(fill_value).replace("None", fill_value)
 
         return df
 
-    def _compare_all_metrics(self, forecast_std: pd.DataFrame, actual_std: pd.DataFrame, all_columns: list[str]) -> list[dict]:
+    def _compare_all_metrics(
+        self,
+        forecast_std: pd.DataFrame,
+        actual_std: pd.DataFrame,
+        all_columns: list[str],
+    ) -> list[dict]:
         results = []
         for idx in forecast_std.index:
-            date_value = forecast_std.loc[idx, self.date_column] if self.date_column in forecast_std.columns else None
+            date_value = (
+                forecast_std.loc[idx, self.date_column]
+                if self.date_column in forecast_std.columns
+                else None
+            )
             forecast_row = forecast_std.loc[idx]
             actual_row = actual_std.loc[idx] if idx in actual_std.index else None
 
@@ -163,21 +192,43 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
                 continue
 
             for column in all_columns:
-                result = self._compare_metric(column, forecast_row[column], actual_row[column], date_value)
+                result = self._compare_metric(
+                    column, forecast_row[column], actual_row[column], date_value
+                )
                 results.append(result)
 
         return results
 
-    def _compare_metric(self, column: str, forecast_value: str, actual_value: float, date_value: Optional[pd.Timestamp] = None) -> dict:
-        forecast_parts = str(forecast_value).split('|')
+    def _compare_metric(
+        self,
+        column: str,
+        forecast_value: str,
+        actual_value: float,
+        date_value: Optional[pd.Timestamp] = None,
+    ) -> dict:
+        forecast_parts = str(forecast_value).split("|")
 
         try:
-            point_forecast = float(forecast_parts[self.QUANTILE_POINT_IDX]) if len(forecast_parts) > self.QUANTILE_POINT_IDX else 0.0
-            lower_bound = float(forecast_parts[self.lower_quantile_idx]) if len(forecast_parts) > self.lower_quantile_idx else 0.0
-            upper_bound = float(forecast_parts[self.upper_quantile_idx]) if len(forecast_parts) > self.upper_quantile_idx else 0.0
+            point_forecast = (
+                float(forecast_parts[self.QUANTILE_POINT_IDX])
+                if len(forecast_parts) > self.QUANTILE_POINT_IDX
+                else 0.0
+            )
+            lower_bound = (
+                float(forecast_parts[self.lower_quantile_idx])
+                if len(forecast_parts) > self.lower_quantile_idx
+                else 0.0
+            )
+            upper_bound = (
+                float(forecast_parts[self.upper_quantile_idx])
+                if len(forecast_parts) > self.upper_quantile_idx
+                else 0.0
+            )
 
             if len(forecast_parts) < self.EXPECTED_QUANTILE_COUNT:
-                warnings.warn(f"Expected {self.EXPECTED_QUANTILE_COUNT} quantiles, got {len(forecast_parts)}.")
+                warnings.warn(
+                    f"Expected {self.EXPECTED_QUANTILE_COUNT} quantiles, got {len(forecast_parts)}."
+                )
         except (ValueError, IndexError):
             point_forecast = lower_bound = upper_bound = 0.0
 
@@ -186,47 +237,55 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         except (ValueError, TypeError):
             actual = 0.0
 
-        status = 'NO_FORECAST'
+        status = "NO_FORECAST"
         deviation_pct = 0.0
 
         if pd.isna(lower_bound) or pd.isna(upper_bound) or pd.isna(point_forecast):
-            status = 'NO_FORECAST'
+            status = "NO_FORECAST"
         elif lower_bound == 0 and upper_bound == 0 and point_forecast == 0:
-            status = 'NO_FORECAST'
+            status = "NO_FORECAST"
         elif lower_bound <= actual <= upper_bound:
-            status = 'IN_RANGE'
+            status = "IN_RANGE"
         else:
             if actual < lower_bound:
-                status = 'BELOW_LOWER'
-                deviation_pct = ((lower_bound - actual) / lower_bound) if lower_bound != 0 else (abs(actual) if actual != 0 else 0.0)
+                status = "BELOW_LOWER"
+                deviation_pct = (
+                    ((lower_bound - actual) / lower_bound)
+                    if lower_bound != 0
+                    else (abs(actual) if actual != 0 else 0.0)
+                )
             elif actual > upper_bound:
-                status = 'ABOVE_UPPER'
-                deviation_pct = ((actual - upper_bound) / upper_bound) if upper_bound != 0 else (abs(actual) if actual != 0 else 0.0)
+                status = "ABOVE_UPPER"
+                deviation_pct = (
+                    ((actual - upper_bound) / upper_bound)
+                    if upper_bound != 0
+                    else (abs(actual) if actual != 0 else 0.0)
+                )
 
         result = {
-            'metric': column,
-            'actual': round(actual),
-            'forecast': round(point_forecast),
-            'lower_bound': round(lower_bound),
-            'upper_bound': round(upper_bound),
-            'status': status,
-            'deviation_pct': round(deviation_pct, 2)
+            "metric": column,
+            "actual": round(actual),
+            "forecast": round(point_forecast),
+            "lower_bound": round(lower_bound),
+            "upper_bound": round(upper_bound),
+            "status": status,
+            "deviation_pct": round(deviation_pct, 2),
         }
 
         if date_value is not None:
             # Convert to date only (remove time component for consistency)
             if isinstance(date_value, pd.Timestamp):
                 date_value = date_value.date()
-            result = {'date': date_value, **result}
+            result = {"date": date_value, **result}
 
         return result
 
     def _split_metric_to_dimensions(self, df: pd.DataFrame):
-        if 'metric' not in df.columns or not self.dimension_names:
+        if "metric" not in df.columns or not self.dimension_names:
             return df
 
         df = df.copy()
-        metric_parts = df['metric'].str.split('_', expand=True)
+        metric_parts = df["metric"].str.split("_", expand=True)
 
         for i, dim_name in enumerate(self.dimension_names):
             if i < metric_parts.shape[1]:
@@ -237,5 +296,5 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         return df
 
 
-# Backward compatibility alias  
+# Backward compatibility alias
 ForecastActualComparator = ForecastActualAnomalyDetector

@@ -6,7 +6,7 @@ Run this after installing dependencies: pip install -r requirements.txt
 """
 
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 def create_sample_data():
@@ -18,20 +18,25 @@ def create_sample_data():
     # Create forecast data (pivot format with pipe-separated quantiles)
     # Format: "point|q10|q20|q30|q40|q50|q60|q70|q80|q90"
     forecast_data = {
-        'date': [test_date],
-        'desktop_organic': ['100|90|92|95|98|100|102|105|108|110'],
-        'desktop_paid': ['50|45|46|47|48|50|52|53|55|60'],
-        'mobile_organic': ['80|70|72|75|77|80|82|85|88|90'],
-        'mobile_paid': ['30|25|26|27|28|30|32|33|35|40']
+        "date": [test_date],
+        "desktop_organic": ["100|90|92|95|98|100|102|105|108|110"],
+        "desktop_paid": ["50|45|46|47|48|50|52|53|55|60"],
+        "mobile_organic": ["80|70|72|75|77|80|82|85|88|90"],
+        "mobile_paid": ["30|25|26|27|28|30|32|33|35|40"],
     }
     forecast_df = pd.DataFrame(forecast_data)
 
     # Create actual data (raw format - will be pivoted)
     actual_data = {
-        'date': [test_date, test_date, test_date, test_date],
-        'platform': ['desktop', 'desktop', 'mobile', 'mobile'],
-        'channel': ['organic', 'paid', 'organic', 'paid'],
-        'sessions': [95, 65, 75, 28]  # organic in range, paid above, organic below, paid in range
+        "date": [test_date, test_date, test_date, test_date],
+        "platform": ["desktop", "desktop", "mobile", "mobile"],
+        "channel": ["organic", "paid", "organic", "paid"],
+        "sessions": [
+            95,
+            65,
+            75,
+            28,
+        ],  # organic in range, paid above, organic below, paid in range
     }
     actual_df = pd.DataFrame(actual_data)
 
@@ -62,9 +67,7 @@ def test_anomaly_detection():
 
         # Pivot actual data (transformer moved to component level)
         transformer = PivotTransformer(
-            index="date",
-            columns=["platform", "channel"],
-            values="sessions"
+            index="date", columns=["platform", "channel"], values="sessions"
         )
         actual_df_pivoted = transformer(actual_df)
 
@@ -74,8 +77,7 @@ def test_anomaly_detection():
 
         # Configure detector (no transformer parameter)
         detector = ForecastActualComparator(
-            date_column="date",
-            exclude_columns=["date"]
+            date_column="date", exclude_columns=["date"]
         )
 
         # Run detection with pivoted actual data
@@ -89,15 +91,19 @@ def test_anomaly_detection():
         print("-" * 60)
         print(f"Total metrics analyzed: {len(results)}")
         print("\nStatus breakdown:")
-        print(results['status'].value_counts())
+        print(results["status"].value_counts())
 
         # Show anomalies
-        anomalies = results[results['status'].isin(['BELOW_P10', 'ABOVE_P90'])]
+        anomalies = results[results["status"].isin(["BELOW_P10", "ABOVE_P90"])]
         print(f"\nAnomalies detected: {len(anomalies)}")
 
         if len(anomalies) > 0:
             print("\nAnomaly details:")
-            print(anomalies[['metric', 'actual', 'q10', 'q90', 'status', 'deviation_pct']].to_string(index=False))
+            print(
+                anomalies[
+                    ["metric", "actual", "q10", "q90", "status", "deviation_pct"]
+                ].to_string(index=False)
+            )
 
         print("\n5. EXPECTED RESULTS:")
         print("-" * 60)
@@ -120,6 +126,7 @@ def test_anomaly_detection():
     except Exception as e:
         print(f"Error during test: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 
@@ -136,9 +143,7 @@ def test_with_filter():
 
         # Pivot actual data (transformer moved to component level)
         transformer = PivotTransformer(
-            index="date",
-            columns=["platform", "channel"],
-            values="sessions"
+            index="date", columns=["platform", "channel"], values="sessions"
         )
         actual_df_pivoted = transformer(actual_df)
 
@@ -148,11 +153,13 @@ def test_with_filter():
         detector = ForecastActualComparator(
             date_column="date",
             transformers={
-                'after': [
-                    ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER'], mode='include'),
-                    ValueFilter('deviation_pct', min_value=0.05)  # 5% minimum
+                "after": [
+                    ValueFilter(
+                        "status", values=["BELOW_LOWER", "ABOVE_UPPER"], mode="include"
+                    ),
+                    ValueFilter("deviation_pct", min_value=0.05),  # 5% minimum
                 ]
-            }
+            },
         )
 
         print("\n" + "=" * 60)
@@ -161,8 +168,7 @@ def test_with_filter():
 
         # Run detection with pivoted actual data
         filtered_results = detector.detect(
-            forecast_df=forecast_df,
-            actual_df=actual_df_pivoted
+            forecast_df=forecast_df, actual_df=actual_df_pivoted
         )
 
         print("\nFiltered results (deviation > 5%):")
@@ -177,6 +183,7 @@ def test_with_filter():
     except Exception as e:
         print(f"Error during filtered test: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 

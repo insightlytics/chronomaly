@@ -21,7 +21,7 @@ class TestBug008BigQueryDispositionValidation:
             BigQueryDataWriter(
                 dataset="test_dataset",
                 table="test_table",
-                create_disposition="INVALID_VALUE"
+                create_disposition="INVALID_VALUE",
             )
 
     def test_invalid_write_disposition_raises_error(self):
@@ -32,7 +32,7 @@ class TestBug008BigQueryDispositionValidation:
             BigQueryDataWriter(
                 dataset="test_dataset",
                 table="test_table",
-                write_disposition="INVALID_VALUE"
+                write_disposition="INVALID_VALUE",
             )
 
     def test_valid_dispositions_accepted(self):
@@ -44,7 +44,7 @@ class TestBug008BigQueryDispositionValidation:
             dataset="test_dataset",
             table="test_table",
             create_disposition="CREATE_IF_NEEDED",
-            write_disposition="WRITE_TRUNCATE"
+            write_disposition="WRITE_TRUNCATE",
         )
         assert writer.create_disposition == "CREATE_IF_NEEDED"
         assert writer.write_disposition == "WRITE_TRUNCATE"
@@ -53,7 +53,7 @@ class TestBug008BigQueryDispositionValidation:
 class TestBug009BigQueryErrorHandling:
     """Tests for BUG-009: BigQuery writer has no error handling for job failures"""
 
-    @patch('chronomaly.infrastructure.data.writers.databases.bigquery.bigquery.Client')
+    @patch("chronomaly.infrastructure.data.writers.databases.bigquery.bigquery.Client")
     def test_job_failure_raises_runtime_error_with_context(self, mock_client_class):
         """
         BUG-009: Test that job failures raise RuntimeError with helpful context.
@@ -67,13 +67,10 @@ class TestBug009BigQueryErrorHandling:
         mock_job.result.side_effect = Exception("Permission denied")
         mock_client.load_table_from_dataframe.return_value = mock_job
 
-        writer = BigQueryDataWriter(
-            dataset="test_dataset",
-            table="test_table"
-        )
+        writer = BigQueryDataWriter(dataset="test_dataset", table="test_table")
 
         # Create test dataframe
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
 
         # Should raise RuntimeError with context
         with pytest.raises(RuntimeError, match="Failed to write to BigQuery table"):
@@ -94,28 +91,29 @@ class TestBug010WorkflowTypeErrorHandling:
         """
         # Create mock components
         mock_reader = Mock()
-        mock_reader.load.return_value = pd.DataFrame({
-            'a': [1, 2, 3]
-        }, index=pd.date_range('2024-01-01', periods=3))
+        mock_reader.load.return_value = pd.DataFrame(
+            {"a": [1, 2, 3]}, index=pd.date_range("2024-01-01", periods=3)
+        )
 
         # Forecaster WITHOUT return_point parameter
         mock_forecaster = Mock()
-        mock_forecaster.forecast = Mock(return_value=pd.DataFrame({
-            'a': [4, 5]
-        }, index=pd.date_range('2024-01-04', periods=2)))
+        mock_forecaster.forecast = Mock(
+            return_value=pd.DataFrame(
+                {"a": [4, 5]}, index=pd.date_range("2024-01-04", periods=2)
+            )
+        )
 
         # Remove return_point from signature by using a function
         def forecast_no_return_point(dataframe, horizon):
-            return pd.DataFrame({'a': [4, 5]})
+            return pd.DataFrame({"a": [4, 5]})
+
         mock_forecaster.forecast = forecast_no_return_point
 
         mock_writer = Mock()
 
         # Create workflow
         workflow = ForecastWorkflow(
-            data_reader=mock_reader,
-            forecaster=mock_forecaster,
-            data_writer=mock_writer
+            data_reader=mock_reader, forecaster=mock_forecaster, data_writer=mock_writer
         )
 
         # Should work without error (inspect detects missing parameter)
@@ -128,23 +126,23 @@ class TestBug010WorkflowTypeErrorHandling:
         """
         # Create mock components
         mock_reader = Mock()
-        mock_reader.load.return_value = pd.DataFrame({
-            'a': [1, 2, 3]
-        }, index=pd.date_range('2024-01-01', periods=3))
+        mock_reader.load.return_value = pd.DataFrame(
+            {"a": [1, 2, 3]}, index=pd.date_range("2024-01-01", periods=3)
+        )
 
         # Forecaster WITH return_point parameter
         mock_forecaster = Mock()
+
         def forecast_with_return_point(dataframe, horizon, return_point=False):
-            return pd.DataFrame({'a': [4, 5]})
+            return pd.DataFrame({"a": [4, 5]})
+
         mock_forecaster.forecast = forecast_with_return_point
 
         mock_writer = Mock()
 
         # Create workflow
         workflow = ForecastWorkflow(
-            data_reader=mock_reader,
-            forecaster=mock_forecaster,
-            data_writer=mock_writer
+            data_reader=mock_reader, forecaster=mock_forecaster, data_writer=mock_writer
         )
 
         # Should pass return_point parameter
@@ -164,9 +162,7 @@ class TestBug011WorkflowHorizonValidation:
         mock_writer = Mock()
 
         workflow = ForecastWorkflow(
-            data_reader=mock_reader,
-            forecaster=mock_forecaster,
-            data_writer=mock_writer
+            data_reader=mock_reader, forecaster=mock_forecaster, data_writer=mock_writer
         )
 
         with pytest.raises(ValueError, match="horizon must be a positive integer"):
@@ -181,9 +177,7 @@ class TestBug011WorkflowHorizonValidation:
         mock_writer = Mock()
 
         workflow = ForecastWorkflow(
-            data_reader=mock_reader,
-            forecaster=mock_forecaster,
-            data_writer=mock_writer
+            data_reader=mock_reader, forecaster=mock_forecaster, data_writer=mock_writer
         )
 
         with pytest.raises(ValueError, match="horizon must be a positive integer"):
@@ -198,9 +192,7 @@ class TestBug011WorkflowHorizonValidation:
         mock_writer = Mock()
 
         workflow = ForecastWorkflow(
-            data_reader=mock_reader,
-            forecaster=mock_forecaster,
-            data_writer=mock_writer
+            data_reader=mock_reader, forecaster=mock_forecaster, data_writer=mock_writer
         )
 
         with pytest.raises(ValueError, match="horizon must be a positive integer"):
@@ -224,9 +216,7 @@ class TestBug012WorkflowDataValidation:
         mock_writer = Mock()
 
         workflow = ForecastWorkflow(
-            data_reader=mock_reader,
-            forecaster=mock_forecaster,
-            data_writer=mock_writer
+            data_reader=mock_reader, forecaster=mock_forecaster, data_writer=mock_writer
         )
 
         with pytest.raises(ValueError, match="Data reader returned empty dataset"):
@@ -243,9 +233,7 @@ class TestBug012WorkflowDataValidation:
         mock_writer = Mock()
 
         workflow = ForecastWorkflow(
-            data_reader=mock_reader,
-            forecaster=mock_forecaster,
-            data_writer=mock_writer
+            data_reader=mock_reader, forecaster=mock_forecaster, data_writer=mock_writer
         )
 
         with pytest.raises(ValueError, match="Data reader returned empty dataset"):
@@ -264,9 +252,7 @@ class TestBug012WorkflowDataValidation:
         mock_writer = Mock()
 
         workflow = ForecastWorkflow(
-            data_reader=mock_reader,
-            forecaster=mock_forecaster,
-            data_writer=mock_writer
+            data_reader=mock_reader, forecaster=mock_forecaster, data_writer=mock_writer
         )
 
         with pytest.raises(ValueError, match="Data reader returned empty dataset"):
@@ -276,7 +262,7 @@ class TestBug012WorkflowDataValidation:
 class TestBug007BigQueryDeprecatedAPI:
     """Tests for BUG-007: BigQuery writer uses deprecated API"""
 
-    @patch('chronomaly.infrastructure.data.writers.databases.bigquery.bigquery.Client')
+    @patch("chronomaly.infrastructure.data.writers.databases.bigquery.bigquery.Client")
     def test_uses_table_id_string_not_deprecated_methods(self, mock_client_class):
         """
         BUG-007: Test that modern table_id string is used instead of deprecated dataset().table().
@@ -289,12 +275,10 @@ class TestBug007BigQueryDeprecatedAPI:
         mock_client.load_table_from_dataframe.return_value = mock_job
 
         writer = BigQueryDataWriter(
-            project="test_project",
-            dataset="test_dataset",
-            table="test_table"
+            project="test_project", dataset="test_dataset", table="test_table"
         )
 
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
         writer.write(df)
 
         # Verify load_table_from_dataframe was called with string table_id
@@ -306,7 +290,7 @@ class TestBug007BigQueryDeprecatedAPI:
         assert isinstance(table_ref_arg, str)
         assert table_ref_arg == "test_project.test_dataset.test_table"
 
-    @patch('chronomaly.infrastructure.data.writers.databases.bigquery.bigquery.Client')
+    @patch("chronomaly.infrastructure.data.writers.databases.bigquery.bigquery.Client")
     def test_table_id_without_project(self, mock_client_class):
         """
         BUG-007: Test table_id construction when project is not specified.
@@ -318,12 +302,9 @@ class TestBug007BigQueryDeprecatedAPI:
         mock_job = MagicMock()
         mock_client.load_table_from_dataframe.return_value = mock_job
 
-        writer = BigQueryDataWriter(
-            dataset="test_dataset",
-            table="test_table"
-        )
+        writer = BigQueryDataWriter(dataset="test_dataset", table="test_table")
 
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
         writer.write(df)
 
         # Verify table_id format without project

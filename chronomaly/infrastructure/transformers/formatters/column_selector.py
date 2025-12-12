@@ -46,11 +46,7 @@ class ColumnSelector(DataFrameFormatter):
         )
     """
 
-    def __init__(
-        self,
-        columns: Union[str, List[str]],
-        mode: str = 'drop'
-    ):
+    def __init__(self, columns: Union[str, List[str]], mode: str = "drop"):
         """
         Initialize ColumnSelector.
 
@@ -63,10 +59,8 @@ class ColumnSelector(DataFrameFormatter):
             ValueError: If columns list is empty
         """
         # Validate mode
-        if mode not in ['keep', 'drop']:
-            raise ValueError(
-                f"mode must be 'keep' or 'drop', got '{mode}'"
-            )
+        if mode not in ["keep", "drop"]:
+            raise ValueError(f"mode must be 'keep' or 'drop', got '{mode}'")
 
         # Normalize columns to list
         if isinstance(columns, str):
@@ -98,7 +92,7 @@ class ColumnSelector(DataFrameFormatter):
         if df.empty:
             return df.copy()
 
-        if self.mode == 'drop':
+        if self.mode == "drop":
             # Drop specified columns (only those that exist)
             columns_to_drop = [col for col in self.columns if col in df.columns]
             return df.drop(columns=columns_to_drop).copy()

@@ -5,9 +5,9 @@ Tests for notification workflow and components.
 import os
 import pytest
 import pandas as pd
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 from chronomaly.infrastructure.data.readers import DataFrameDataReader
-from chronomaly.infrastructure.notifiers import Notifier, EmailNotifier
+from chronomaly.infrastructure.notifiers import EmailNotifier, Notifier
 from chronomaly.application.workflows import NotificationWorkflow
 from chronomaly.infrastructure.transformers.filters import ValueFilter
 
@@ -15,16 +15,16 @@ from chronomaly.infrastructure.transformers.filters import ValueFilter
 @pytest.fixture(autouse=True)
 def smtp_env_vars():
     """Set up SMTP environment variables for all tests in this module."""
-    os.environ['SMTP_HOST'] = 'smtp.test.com'
-    os.environ['SMTP_USER'] = 'test@example.com'
-    os.environ['SMTP_PASSWORD'] = 'testpassword'
-    os.environ['SMTP_FROM_EMAIL'] = 'test@example.com'
+    os.environ["SMTP_HOST"] = "smtp.test.com"
+    os.environ["SMTP_USER"] = "test@example.com"
+    os.environ["SMTP_PASSWORD"] = "testpassword"
+    os.environ["SMTP_FROM_EMAIL"] = "test@example.com"
     yield
     # Cleanup
-    os.environ.pop('SMTP_HOST', None)
-    os.environ.pop('SMTP_USER', None)
-    os.environ.pop('SMTP_PASSWORD', None)
-    os.environ.pop('SMTP_FROM_EMAIL', None)
+    os.environ.pop("SMTP_HOST", None)
+    os.environ.pop("SMTP_USER", None)
+    os.environ.pop("SMTP_PASSWORD", None)
+    os.environ.pop("SMTP_FROM_EMAIL", None)
 
 
 class TestDataFrameDataReader:
@@ -32,7 +32,7 @@ class TestDataFrameDataReader:
 
     def test_load_returns_dataframe(self):
         """Test that load() returns a DataFrame"""
-        df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
         reader = DataFrameDataReader(dataframe=df)
         result = reader.load()
 
@@ -41,29 +41,29 @@ class TestDataFrameDataReader:
 
     def test_dataframe_is_copied(self):
         """Test that DataFrame is copied to avoid mutations"""
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
         reader = DataFrameDataReader(dataframe=df)
 
         # Mutate original
-        df['a'] = [10, 20, 30]
+        df["a"] = [10, 20, 30]
 
         # Load should return original values (copy)
         result = reader.load()
-        assert result['a'].tolist() == [1, 2, 3]
+        assert result["a"].tolist() == [1, 2, 3]
 
     def test_load_returns_copy(self):
         """Test that each load() call returns a new copy"""
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
         reader = DataFrameDataReader(dataframe=df)
 
         result1 = reader.load()
         result2 = reader.load()
 
         # Mutate result1
-        result1['a'] = [10, 20, 30]
+        result1["a"] = [10, 20, 30]
 
         # result2 should be unchanged
-        assert result2['a'].tolist() == [1, 2, 3]
+        assert result2["a"].tolist() == [1, 2, 3]
 
     def test_invalid_input_raises_error(self):
         """Test that non-DataFrame input raises TypeError"""
@@ -72,23 +72,27 @@ class TestDataFrameDataReader:
 
     def test_transformers_are_applied(self):
         """Test that transformers are applied after loading"""
-        df = pd.DataFrame({
-            'status': ['ABOVE_UPPER', 'IN_RANGE', 'BELOW_LOWER'],
-            'value': [100, 50, 10]
-        })
+        df = pd.DataFrame(
+            {
+                "status": ["ABOVE_UPPER", "IN_RANGE", "BELOW_LOWER"],
+                "value": [100, 50, 10],
+            }
+        )
 
         reader = DataFrameDataReader(
             dataframe=df,
             transformers={
-                'after': [
-                    ValueFilter('status', values=['ABOVE_UPPER', 'BELOW_LOWER'], mode='include')
+                "after": [
+                    ValueFilter(
+                        "status", values=["ABOVE_UPPER", "BELOW_LOWER"], mode="include"
+                    )
                 ]
-            }
+            },
         )
 
         result = reader.load()
         assert len(result) == 2
-        assert 'IN_RANGE' not in result['status'].values
+        assert "IN_RANGE" not in result["status"].values
 
 
 class TestEmailNotifier:
@@ -118,36 +122,36 @@ class TestEmailNotifier:
     def test_missing_smtp_user_raises_error(self):
         """Test that missing SMTP_USER raises ValueError"""
         # Temporarily clear SMTP_USER
-        original_user = os.environ.pop('SMTP_USER', None)
+        original_user = os.environ.pop("SMTP_USER", None)
         try:
             with pytest.raises(ValueError, match="SMTP username is required"):
                 EmailNotifier(to="test@example.com")
         finally:
             if original_user:
-                os.environ['SMTP_USER'] = original_user
+                os.environ["SMTP_USER"] = original_user
 
     def test_missing_smtp_password_raises_error(self):
         """Test that missing SMTP_PASSWORD raises ValueError"""
         # Temporarily clear SMTP_PASSWORD
-        original_password = os.environ.pop('SMTP_PASSWORD', None)
+        original_password = os.environ.pop("SMTP_PASSWORD", None)
         try:
             with pytest.raises(ValueError, match="SMTP password is required"):
                 EmailNotifier(to="test@example.com")
         finally:
             if original_password:
-                os.environ['SMTP_PASSWORD'] = original_password
+                os.environ["SMTP_PASSWORD"] = original_password
 
     def test_missing_smtp_host_raises_error(self):
         """Test that missing SMTP_HOST raises ValueError"""
         # Temporarily set empty SMTP_HOST
-        original_host = os.environ.get('SMTP_HOST')
-        os.environ['SMTP_HOST'] = ''
+        original_host = os.environ.get("SMTP_HOST")
+        os.environ["SMTP_HOST"] = ""
         try:
             with pytest.raises(ValueError, match="SMTP host is required"):
                 EmailNotifier(to="test@example.com")
         finally:
             if original_host:
-                os.environ['SMTP_HOST'] = original_host
+                os.environ["SMTP_HOST"] = original_host
 
     def test_payload_without_anomalies_raises_error(self):
         """Test that payload without 'anomalies' key raises ValueError"""
@@ -161,7 +165,7 @@ class TestEmailNotifier:
         notifier = EmailNotifier(to="test@example.com")
 
         with pytest.raises(TypeError, match="must be a DataFrame"):
-            notifier.notify({'anomalies': [1, 2, 3]})
+            notifier.notify({"anomalies": [1, 2, 3]})
 
     def test_empty_dataframe_skips_notification(self):
         """Test that empty DataFrame skips sending email"""
@@ -169,69 +173,70 @@ class TestEmailNotifier:
         empty_df = pd.DataFrame()
 
         # Mock SMTP to ensure it's not called
-        with patch('smtplib.SMTP') as mock_smtp:
-            notifier.notify({'anomalies': empty_df})
+        with patch("smtplib.SMTP") as mock_smtp:
+            notifier.notify({"anomalies": empty_df})
             mock_smtp.assert_not_called()
 
     def test_transformers_filter_before_notification(self):
         """Test that transformers are applied before notification"""
-        df = pd.DataFrame({
-            'status': ['ABOVE_UPPER', 'IN_RANGE', 'BELOW_LOWER'],
-            'value': [100, 50, 10]
-        })
+        df = pd.DataFrame(
+            {
+                "status": ["ABOVE_UPPER", "IN_RANGE", "BELOW_LOWER"],
+                "value": [100, 50, 10],
+            }
+        )
 
         notifier = EmailNotifier(
             to="test@example.com",
             transformers={
-                'before': [
-                    ValueFilter('status', values=['IN_RANGE'], mode='include')
-                ]
-            }
+                "before": [ValueFilter("status", values=["IN_RANGE"], mode="include")]
+            },
         )
 
         # Mock SMTP
-        with patch('smtplib.SMTP') as mock_smtp:
+        with patch("smtplib.SMTP") as mock_smtp:
             # All anomalies will be filtered out by transformer (only IN_RANGE passes)
             # But we then filter to only anomalies, so result is empty
             # Actually, this keeps IN_RANGE, so email should be sent
-            notifier.notify({'anomalies': df})
+            notifier.notify({"anomalies": df})
 
             # Since we kept IN_RANGE, email should be sent
             mock_smtp.assert_called_once()
 
     def test_filtered_to_empty_skips_notification(self):
         """Test that filtering to empty DataFrame skips notification"""
-        df = pd.DataFrame({
-            'status': ['IN_RANGE', 'IN_RANGE'],
-            'value': [50, 60]
-        })
+        df = pd.DataFrame({"status": ["IN_RANGE", "IN_RANGE"], "value": [50, 60]})
 
         # Filter to only anomalies (ABOVE_UPPER, BELOW_LOWER)
         notifier = EmailNotifier(
             to="test@example.com",
             transformers={
-                'before': [
-                    ValueFilter('status', values=['ABOVE_UPPER', 'BELOW_LOWER'], mode='include')
+                "before": [
+                    ValueFilter(
+                        "status", values=["ABOVE_UPPER", "BELOW_LOWER"], mode="include"
+                    )
                 ]
-            }
+            },
         )
 
         # Mock SMTP to ensure it's not called
-        with patch('smtplib.SMTP') as mock_smtp:
-            notifier.notify({'anomalies': df})
+        with patch("smtplib.SMTP") as mock_smtp:
+            notifier.notify({"anomalies": df})
             mock_smtp.assert_not_called()
 
-    @patch('smtplib.SMTP')
+    @patch("smtplib.SMTP")
     def test_send_email_success(self, mock_smtp):
         """Test successful email sending"""
-        df = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['sales'],
-            'status': ['ABOVE_UPPER'],
-            'actual': [100],
-            'forecast': [50],
-            'deviation_pct': [100.0]
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric": ["sales"],
+                "status": ["ABOVE_UPPER"],
+                "actual": [100],
+                "forecast": [50],
+                "deviation_pct": [100.0],
+            }
+        )
 
         notifier = EmailNotifier(to="test@example.com")
 
@@ -240,7 +245,7 @@ class TestEmailNotifier:
         mock_smtp.return_value.__enter__.return_value = mock_server
 
         # Send notification
-        notifier.notify({'anomalies': df})
+        notifier.notify({"anomalies": df})
 
         # Verify SMTP was called (with config from environment or defaults)
         assert mock_smtp.call_count == 1
@@ -251,16 +256,18 @@ class TestEmailNotifier:
         mock_server.login.assert_called_once()
         mock_server.send_message.assert_called_once()
 
-    @patch('smtplib.SMTP')
+    @patch("smtplib.SMTP")
     def test_html_generation(self, mock_smtp):
         """Test HTML email content generation"""
-        df = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['sales'],
-            'status': ['ABOVE_UPPER'],
-            'actual': [100.5],
-            'forecast': [50.2]
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric": ["sales"],
+                "status": ["ABOVE_UPPER"],
+                "actual": [100.5],
+                "forecast": [50.2],
+            }
+        )
 
         notifier = EmailNotifier(to="test@example.com")
 
@@ -268,7 +275,7 @@ class TestEmailNotifier:
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
 
-        notifier.notify({'anomalies': df})
+        notifier.notify({"anomalies": df})
 
         # Get the message that was sent
         call_args = mock_server.send_message.call_args[0]
@@ -276,12 +283,12 @@ class TestEmailNotifier:
 
         # Verify HTML content
         html_part = message.get_payload()[0]
-        html_content = html_part.get_payload(decode=True).decode('utf-8')
+        html_content = html_part.get_payload(decode=True).decode("utf-8")
 
-        assert 'Anomaly Detection Alert' in html_content
-        assert 'ABOVE_UPPER' in html_content
-        assert '100.50' in html_content  # Numeric formatting
-        assert 'sales' in html_content
+        assert "Anomaly Detection Alert" in html_content
+        assert "ABOVE_UPPER" in html_content
+        assert "100.50" in html_content  # Numeric formatting
+        assert "sales" in html_content
 
 
 class TestNotificationWorkflow:
@@ -289,13 +296,10 @@ class TestNotificationWorkflow:
 
     def test_initialization_with_valid_inputs(self):
         """Test workflow initialization with valid inputs"""
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
         notifier = Mock(spec=Notifier)
 
-        workflow = NotificationWorkflow(
-            anomalies_data=df,
-            notifiers=[notifier]
-        )
+        workflow = NotificationWorkflow(anomalies_data=df, notifiers=[notifier])
 
         assert workflow.anomalies_data.equals(df)
         assert workflow.notifiers == [notifier]
@@ -305,61 +309,45 @@ class TestNotificationWorkflow:
         notifier = Mock(spec=Notifier)
 
         with pytest.raises(TypeError, match="must be a DataFrame"):
-            NotificationWorkflow(
-                anomalies_data=[1, 2, 3],
-                notifiers=[notifier]
-            )
+            NotificationWorkflow(anomalies_data=[1, 2, 3], notifiers=[notifier])
 
     def test_empty_anomalies_data_raises_error(self):
         """Test that empty DataFrame raises ValueError"""
         notifier = Mock(spec=Notifier)
 
         with pytest.raises(ValueError, match="cannot be empty"):
-            NotificationWorkflow(
-                anomalies_data=pd.DataFrame(),
-                notifiers=[notifier]
-            )
+            NotificationWorkflow(anomalies_data=pd.DataFrame(), notifiers=[notifier])
 
     def test_invalid_notifiers_type_raises_error(self):
         """Test that non-list notifiers raises TypeError"""
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
 
         with pytest.raises(TypeError, match="must be a list"):
-            NotificationWorkflow(
-                anomalies_data=df,
-                notifiers="not a list"
-            )
+            NotificationWorkflow(anomalies_data=df, notifiers="not a list")
 
     def test_empty_notifiers_list_raises_error(self):
         """Test that empty notifiers list raises ValueError"""
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
 
         with pytest.raises(ValueError, match="cannot be empty"):
-            NotificationWorkflow(
-                anomalies_data=df,
-                notifiers=[]
-            )
+            NotificationWorkflow(anomalies_data=df, notifiers=[])
 
     def test_invalid_notifier_instance_raises_error(self):
         """Test that non-Notifier instances raise TypeError"""
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
 
         with pytest.raises(TypeError, match="must be a Notifier instance"):
-            NotificationWorkflow(
-                anomalies_data=df,
-                notifiers=["not a notifier"]
-            )
+            NotificationWorkflow(anomalies_data=df, notifiers=["not a notifier"])
 
     def test_run_calls_all_notifiers(self):
         """Test that run() calls notify() on all notifiers"""
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
 
         notifier1 = Mock(spec=Notifier)
         notifier2 = Mock(spec=Notifier)
 
         workflow = NotificationWorkflow(
-            anomalies_data=df,
-            notifiers=[notifier1, notifier2]
+            anomalies_data=df, notifiers=[notifier1, notifier2]
         )
 
         workflow.run()
@@ -369,49 +357,44 @@ class TestNotificationWorkflow:
         notifier2.notify.assert_called_once()
 
         # Verify they received correct payload
-        expected_payload = {'anomalies': df}
         call_args1 = notifier1.notify.call_args[0][0]
         call_args2 = notifier2.notify.call_args[0][0]
 
-        assert 'anomalies' in call_args1
-        assert call_args1['anomalies'].equals(df)
-        assert 'anomalies' in call_args2
-        assert call_args2['anomalies'].equals(df)
+        assert "anomalies" in call_args1
+        assert call_args1["anomalies"].equals(df)
+        assert "anomalies" in call_args2
+        assert call_args2["anomalies"].equals(df)
 
     def test_run_handles_notifier_failure(self):
         """Test that run() raises RuntimeError with context when notifier fails"""
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
 
         notifier = Mock(spec=Notifier)
         notifier.notify.side_effect = Exception("SMTP connection failed")
 
-        workflow = NotificationWorkflow(
-            anomalies_data=df,
-            notifiers=[notifier]
-        )
+        workflow = NotificationWorkflow(anomalies_data=df, notifiers=[notifier])
 
         with pytest.raises(RuntimeError, match="Failed to send notification via Mock"):
             workflow.run()
 
     def test_integration_with_email_notifier(self):
         """Integration test with actual EmailNotifier"""
-        df = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['sales'],
-            'status': ['ABOVE_UPPER'],
-            'actual': [100],
-            'forecast': [50]
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric": ["sales"],
+                "status": ["ABOVE_UPPER"],
+                "actual": [100],
+                "forecast": [50],
+            }
+        )
 
         email_notifier = EmailNotifier(to="test@example.com")
 
-        workflow = NotificationWorkflow(
-            anomalies_data=df,
-            notifiers=[email_notifier]
-        )
+        workflow = NotificationWorkflow(anomalies_data=df, notifiers=[email_notifier])
 
         # Mock SMTP
-        with patch('smtplib.SMTP') as mock_smtp:
+        with patch("smtplib.SMTP") as mock_smtp:
             mock_server = MagicMock()
             mock_smtp.return_value.__enter__.return_value = mock_server
 

@@ -20,10 +20,7 @@ class PivotTransformer:
     """
 
     def __init__(
-        self,
-        index: Union[str, List[str]],
-        columns: Union[str, List[str]],
-        values: str
+        self, index: Union[str, List[str]], columns: Union[str, List[str]], values: str
     ):
         self.index: str | list[str] = index
         self.columns: str | list[str] = columns
@@ -98,33 +95,40 @@ class PivotTransformer:
         # Clean string columns (lowercase, remove special characters)
         # BUG-35 FIX: Add logging/warning instead of silent pass
         for column in df.columns:
-            if df[column].dtype == 'object' and column not in index_list:
+            if df[column].dtype == "object" and column not in index_list:
                 # Check if column actually contains strings
                 try:
                     # Only apply string operations if column contains strings
-                    if df[column].apply(lambda x: isinstance(x, str) if x is not None else True).all():
-                        df[column] = df[column].str.lower().str.replace(
-                            r'[\(\)\.\-\_\s]', '', regex=True
+                    if (
+                        df[column]
+                        .apply(lambda x: isinstance(x, str) if x is not None else True)
+                        .all()
+                    ):
+                        df[column] = (
+                            df[column]
+                            .str.lower()
+                            .str.replace(r"[\(\)\.\-\_\s]", "", regex=True)
                         )
                 except (AttributeError, TypeError) as e:
                     # Skip columns that don't support string operations
                     # Log the issue for debugging but don't fail
                     import warnings
+
                     warnings.warn(
                         f"Could not apply string transformations to column '{column}': {str(e)}",
-                        UserWarning
+                        UserWarning,
                     )
 
         # Fill NaN values in numeric columns with 0
-        numeric_cols = df.select_dtypes(include='number').columns
+        numeric_cols = df.select_dtypes(include="number").columns
         df[numeric_cols] = df[numeric_cols].fillna(0)
 
         # Create combined timeseries_id if multiple columns
         if len(columns_list) > 1:
-            df['timeseries_id'] = df[columns_list].apply(
-                lambda x: '_'.join(x.astype(str)), axis=1
+            df["timeseries_id"] = df[columns_list].apply(
+                lambda x: "_".join(x.astype(str)), axis=1
             )
-            pivot_columns = 'timeseries_id'
+            pivot_columns = "timeseries_id"
         else:
             pivot_columns = columns_list[0]
 
@@ -135,7 +139,7 @@ class PivotTransformer:
                 index=index_list,
                 columns=pivot_columns,
                 values=self.values,
-                aggfunc='sum'
+                aggfunc="sum",
             )
         except ValueError as e:
             # Common issues: duplicate indices, incompatible types, etc.
@@ -154,6 +158,6 @@ class PivotTransformer:
 
         # If single index is DatetimeIndex, set daily frequency
         if len(index_list) == 1 and isinstance(dataframe_pivot.index, pd.DatetimeIndex):
-            dataframe_pivot = dataframe_pivot.asfreq('D', fill_value=0)
+            dataframe_pivot = dataframe_pivot.asfreq("D", fill_value=0)
 
         return dataframe_pivot

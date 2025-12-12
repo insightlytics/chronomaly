@@ -19,53 +19,9 @@ class NotificationWorkflow:
     Args:
         anomalies_data: DataFrame containing anomaly detection results
         notifiers: List of notifier instances (email, Slack, etc.)
-
-    Example:
-        from chronomaly.application.workflows import NotificationWorkflow
-        from chronomaly.infrastructure.notifiers import EmailNotifier
-        from chronomaly.infrastructure.transformers.filters import ValueFilter
-
-        # Run anomaly detection first
-        anomalies_df = anomaly_workflow.run()
-
-        # Configure email notifier with filters
-        email_notifier = EmailNotifier(
-            to=["team@example.com", "manager@example.com"],
-            smtp_user="alerts@example.com",
-            smtp_password="app_password",
-            transformers={
-                'before': [
-                    # Only email significant anomalies
-                    ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER'], mode='include'),
-                    ValueFilter('deviation_pct', min_value=0.1)  # 10%+ deviation
-                ]
-            }
-        )
-
-        # Create and run notification workflow
-        notification_workflow = NotificationWorkflow(
-            anomalies_data=anomalies_df,
-            notifiers=[email_notifier]
-        )
-        notification_workflow.run()
-
-    Multiple Notifiers Example:
-        # Configure multiple notification channels
-        email_notifier = EmailNotifier(to=["team@example.com"], ...)
-        slack_notifier = SlackNotifier(channel="#alerts", ...)  # Future
-
-        notification_workflow = NotificationWorkflow(
-            anomalies_data=anomalies_df,
-            notifiers=[email_notifier, slack_notifier]
-        )
-        notification_workflow.run()  # Sends to all channels
     """
 
-    def __init__(
-        self,
-        anomalies_data: pd.DataFrame,
-        notifiers: List[Notifier]
-    ):
+    def __init__(self, anomalies_data: pd.DataFrame, notifiers: List[Notifier]):
         # Validate anomalies_data
         if not isinstance(anomalies_data, pd.DataFrame):
             raise TypeError(
@@ -79,9 +35,7 @@ class NotificationWorkflow:
 
         # Validate notifiers
         if not isinstance(notifiers, list):
-            raise TypeError(
-                f"notifiers must be a list, got {type(notifiers).__name__}"
-            )
+            raise TypeError(f"notifiers must be a list, got {type(notifiers).__name__}")
 
         if not notifiers:
             raise ValueError("notifiers list cannot be empty")
@@ -112,9 +66,7 @@ class NotificationWorkflow:
             RuntimeError: If notification fails
         """
         # Prepare payload
-        payload = {
-            'anomalies': self.anomalies_data
-        }
+        payload = {"anomalies": self.anomalies_data}
 
         # Send notifications via all notifiers
         for notifier in self.notifiers:

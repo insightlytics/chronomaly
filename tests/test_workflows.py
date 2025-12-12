@@ -4,8 +4,8 @@ Tests for workflow orchestrators.
 
 import pytest
 import pandas as pd
-from unittest.mock import Mock, MagicMock
-from chronomaly.application.workflows import AnomalyDetectionWorkflow, ForecastWorkflow
+from unittest.mock import Mock
+from chronomaly.application.workflows import AnomalyDetectionWorkflow
 
 
 class TestAnomalyDetectionWorkflow:
@@ -15,24 +15,22 @@ class TestAnomalyDetectionWorkflow:
         """Test basic workflow execution without transformers."""
         # Create mock components
         mock_forecast_reader = Mock()
-        mock_forecast_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric_a': ['100|90|92|95|98|100|102|105|108|110']
-        })
+        mock_forecast_reader.load.return_value = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric_a": ["100|90|92|95|98|100|102|105|108|110"],
+            }
+        )
 
         mock_actual_reader = Mock()
-        mock_actual_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'value': [95]
-        })
+        mock_actual_reader.load.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "value": [95]}
+        )
 
         mock_detector = Mock()
-        mock_detector.detect.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'status': ['IN_RANGE']
-        })
+        mock_detector.detect.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "status": ["IN_RANGE"]}
+        )
 
         mock_writer = Mock()
 
@@ -41,7 +39,7 @@ class TestAnomalyDetectionWorkflow:
             forecast_reader=mock_forecast_reader,
             actual_reader=mock_actual_reader,
             anomaly_detector=mock_detector,
-            data_writer=mock_writer
+            data_writer=mock_writer,
         )
 
         # Execute
@@ -59,25 +57,23 @@ class TestAnomalyDetectionWorkflow:
         """Test workflow execution with transformers at component level."""
         # Create mock components
         mock_forecast_reader = Mock()
-        mock_forecast_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric_a': ['100|90|92|95|98|100|102|105|108|110']
-        })
+        mock_forecast_reader.load.return_value = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric_a": ["100|90|92|95|98|100|102|105|108|110"],
+            }
+        )
 
         mock_actual_reader = Mock()
-        mock_actual_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'value': [95]
-        })
+        mock_actual_reader.load.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "value": [95]}
+        )
 
         # Create mock detector with transformers
         mock_detector = Mock()
-        mock_detector.detect.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'status': ['IN_RANGE']
-        })
+        mock_detector.detect.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "status": ["IN_RANGE"]}
+        )
 
         mock_writer = Mock()
 
@@ -86,7 +82,7 @@ class TestAnomalyDetectionWorkflow:
             forecast_reader=mock_forecast_reader,
             actual_reader=mock_actual_reader,
             anomaly_detector=mock_detector,
-            data_writer=mock_writer
+            data_writer=mock_writer,
         )
 
         # Execute
@@ -108,7 +104,7 @@ class TestAnomalyDetectionWorkflow:
             forecast_reader=mock_forecast_reader,
             actual_reader=mock_actual_reader,
             anomaly_detector=mock_detector,
-            data_writer=mock_writer
+            data_writer=mock_writer,
         )
 
         with pytest.raises(ValueError, match="Forecast reader returned empty dataset"):
@@ -117,10 +113,12 @@ class TestAnomalyDetectionWorkflow:
     def test_workflow_empty_actual_raises_error(self):
         """Test that empty actual data raises ValueError."""
         mock_forecast_reader = Mock()
-        mock_forecast_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric_a': ['100|90|92|95|98|100|102|105|108|110']
-        })
+        mock_forecast_reader.load.return_value = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric_a": ["100|90|92|95|98|100|102|105|108|110"],
+            }
+        )
 
         mock_actual_reader = Mock()
         mock_actual_reader.load.return_value = pd.DataFrame()  # Empty
@@ -132,7 +130,7 @@ class TestAnomalyDetectionWorkflow:
             forecast_reader=mock_forecast_reader,
             actual_reader=mock_actual_reader,
             anomaly_detector=mock_detector,
-            data_writer=mock_writer
+            data_writer=mock_writer,
         )
 
         with pytest.raises(ValueError, match="Actual reader returned empty dataset"):
@@ -141,17 +139,17 @@ class TestAnomalyDetectionWorkflow:
     def test_workflow_empty_detection_result_raises_error(self):
         """Test that empty detection result raises ValueError."""
         mock_forecast_reader = Mock()
-        mock_forecast_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric_a': ['100|90|92|95|98|100|102|105|108|110']
-        })
+        mock_forecast_reader.load.return_value = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric_a": ["100|90|92|95|98|100|102|105|108|110"],
+            }
+        )
 
         mock_actual_reader = Mock()
-        mock_actual_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'value': [95]
-        })
+        mock_actual_reader.load.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "value": [95]}
+        )
 
         mock_detector = Mock()
         mock_detector.detect.return_value = pd.DataFrame()  # Empty
@@ -162,7 +160,7 @@ class TestAnomalyDetectionWorkflow:
             forecast_reader=mock_forecast_reader,
             actual_reader=mock_actual_reader,
             anomaly_detector=mock_detector,
-            data_writer=mock_writer
+            data_writer=mock_writer,
         )
 
         with pytest.raises(ValueError, match="Anomaly detector returned empty results"):
@@ -171,30 +169,28 @@ class TestAnomalyDetectionWorkflow:
     def test_run_without_output(self):
         """Test running workflow without data_writer."""
         mock_forecast_reader = Mock()
-        mock_forecast_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric_a': ['100|90|92|95|98|100|102|105|108|110']
-        })
+        mock_forecast_reader.load.return_value = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric_a": ["100|90|92|95|98|100|102|105|108|110"],
+            }
+        )
 
         mock_actual_reader = Mock()
-        mock_actual_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'value': [95]
-        })
+        mock_actual_reader.load.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "value": [95]}
+        )
 
         mock_detector = Mock()
-        mock_detector.detect.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'status': ['IN_RANGE']
-        })
+        mock_detector.detect.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "status": ["IN_RANGE"]}
+        )
 
         workflow = AnomalyDetectionWorkflow(
             forecast_reader=mock_forecast_reader,
             actual_reader=mock_actual_reader,
             anomaly_detector=mock_detector,
-            data_writer=None
+            data_writer=None,
         )
 
         # Execute without writing (data_writer is None)
@@ -206,25 +202,23 @@ class TestAnomalyDetectionWorkflow:
     def test_transformer_with_format_method(self):
         """Test that transformers with .format() method work correctly at component level."""
         mock_forecast_reader = Mock()
-        mock_forecast_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric_a': ['100|90|92|95|98|100|102|105|108|110']
-        })
+        mock_forecast_reader.load.return_value = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric_a": ["100|90|92|95|98|100|102|105|108|110"],
+            }
+        )
 
         mock_actual_reader = Mock()
-        mock_actual_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'value': [95]
-        })
+        mock_actual_reader.load.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "value": [95]}
+        )
 
         # Mock detector handles transformers internally
         mock_detector = Mock()
-        mock_detector.detect.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'status': ['IN_RANGE']
-        })
+        mock_detector.detect.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "status": ["IN_RANGE"]}
+        )
 
         mock_writer = Mock()
 
@@ -233,7 +227,7 @@ class TestAnomalyDetectionWorkflow:
             forecast_reader=mock_forecast_reader,
             actual_reader=mock_actual_reader,
             anomaly_detector=mock_detector,
-            data_writer=mock_writer
+            data_writer=mock_writer,
         )
 
         result = workflow.run()
@@ -244,24 +238,22 @@ class TestAnomalyDetectionWorkflow:
     def test_transformer_callable(self):
         """Test that callable transformers work correctly at component level."""
         mock_forecast_reader = Mock()
-        mock_forecast_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric_a': ['100|90|92|95|98|100|102|105|108|110']
-        })
+        mock_forecast_reader.load.return_value = pd.DataFrame(
+            {
+                "date": ["2024-01-01"],
+                "metric_a": ["100|90|92|95|98|100|102|105|108|110"],
+            }
+        )
 
         mock_actual_reader = Mock()
-        mock_actual_reader.load.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'value': [95]
-        })
+        mock_actual_reader.load.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "value": [95]}
+        )
 
         mock_detector = Mock()
-        mock_detector.detect.return_value = pd.DataFrame({
-            'date': ['2024-01-01'],
-            'metric': ['metric_a'],
-            'status': ['IN_RANGE']
-        })
+        mock_detector.detect.return_value = pd.DataFrame(
+            {"date": ["2024-01-01"], "metric": ["metric_a"], "status": ["IN_RANGE"]}
+        )
 
         mock_writer = Mock()
 
@@ -270,7 +262,7 @@ class TestAnomalyDetectionWorkflow:
             forecast_reader=mock_forecast_reader,
             actual_reader=mock_actual_reader,
             anomaly_detector=mock_detector,
-            data_writer=mock_writer
+            data_writer=mock_writer,
         )
 
         result = workflow.run()

@@ -31,7 +31,7 @@ class CSVDataReader(DataReader, TransformableMixin):
         file_path: str,
         date_column: Optional[str] = None,
         transformers: Optional[Dict[str, List[Callable]]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         # BUG-17 FIX: Validate file path to prevent path traversal
         if not file_path:
@@ -42,15 +42,11 @@ class CSVDataReader(DataReader, TransformableMixin):
 
         # BUG-41 FIX: Check if file exists
         if not os.path.isfile(abs_path):
-            raise FileNotFoundError(
-                f"CSV file not found: {abs_path}"
-            )
+            raise FileNotFoundError(f"CSV file not found: {abs_path}")
 
         # Check if file is readable
         if not os.access(abs_path, os.R_OK):
-            raise PermissionError(
-                f"CSV file is not readable: {abs_path}"
-            )
+            raise PermissionError(f"CSV file is not readable: {abs_path}")
 
         self.file_path = abs_path
         self.date_column = date_column
@@ -76,9 +72,7 @@ class CSVDataReader(DataReader, TransformableMixin):
             ) from e
 
         if df.empty:
-            raise ValueError(
-                f"CSV file is empty: {self.file_path}"
-            )
+            raise ValueError(f"CSV file is empty: {self.file_path}")
 
         if self.date_column:
             if self.date_column not in df.columns:
@@ -95,6 +89,6 @@ class CSVDataReader(DataReader, TransformableMixin):
                 ) from e
 
         # Apply transformers after loading data
-        df = self._apply_transformers(df, 'after')
+        df = self._apply_transformers(df, "after")
 
         return df

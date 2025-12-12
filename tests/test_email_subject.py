@@ -9,22 +9,24 @@ from datetime import datetime
 from chronomaly.infrastructure.notifiers import EmailNotifier
 
 # Set up required SMTP environment variables for testing
-os.environ['SMTP_HOST'] = 'smtp.test.com'
-os.environ['SMTP_USER'] = 'test@example.com'
-os.environ['SMTP_PASSWORD'] = 'testpassword'
-os.environ['SMTP_FROM_EMAIL'] = 'test@example.com'
+os.environ["SMTP_HOST"] = "smtp.test.com"
+os.environ["SMTP_USER"] = "test@example.com"
+os.environ["SMTP_PASSWORD"] = "testpassword"
+os.environ["SMTP_FROM_EMAIL"] = "test@example.com"
 
 # Create sample anomalies DataFrame
-anomalies_df = pd.DataFrame({
-    'date': ['2025-12-03'],
-    'metric': ['web_organic_sessions'],
-    'platform': ['web'],
-    'channel': ['Organic Search'],
-    'actual': [1500],
-    'forecast': [2000],
-    'deviation_pct': ['-25.0%'],
-    'status': ['BELOW_LOWER']
-})
+anomalies_df = pd.DataFrame(
+    {
+        "date": ["2025-12-03"],
+        "metric": ["web_organic_sessions"],
+        "platform": ["web"],
+        "channel": ["Organic Search"],
+        "actual": [1500],
+        "forecast": [2000],
+        "deviation_pct": ["-25.0%"],
+        "status": ["BELOW_LOWER"],
+    }
+)
 
 print("=" * 80)
 print("Testing Email Subject Customization")
@@ -38,7 +40,9 @@ try:
     notifier = EmailNotifier(to=["test@example.com"])
     subject = notifier._get_email_subject()
     print(f"✓ Subject: '{subject}'")
-    assert subject == "Anomaly Detection Alert", "Default subject should be 'Anomaly Detection Alert'"
+    assert (
+        subject == "Anomaly Detection Alert"
+    ), "Default subject should be 'Anomaly Detection Alert'"
     print("✓ PASSED: Default subject works correctly")
 except Exception as e:
     print(f"✗ FAILED: {e}")
@@ -48,10 +52,7 @@ print()
 print("Test 2: Custom static subject")
 print("-" * 80)
 try:
-    notifier = EmailNotifier(
-        to=["test@example.com"],
-        subject="Custom Alert Subject"
-    )
+    notifier = EmailNotifier(to=["test@example.com"], subject="Custom Alert Subject")
     subject = notifier._get_email_subject()
     print(f"✓ Subject: '{subject}'")
     assert subject == "Custom Alert Subject", "Subject should match custom text"
@@ -64,10 +65,7 @@ print()
 print("Test 3: Subject with {date} placeholder")
 print("-" * 80)
 try:
-    notifier = EmailNotifier(
-        to=["test@example.com"],
-        subject="Daily Report - {date}"
-    )
+    notifier = EmailNotifier(to=["test@example.com"], subject="Daily Report - {date}")
     test_date = datetime(2025, 12, 2, 10, 30, 0)
     subject = notifier._get_email_subject(anomaly_date=test_date)
     expected_subject = "Daily Report - 2025-12-02"
@@ -83,8 +81,7 @@ print("Test 4: Subject with custom date format {date:%d.%m.%Y}")
 print("-" * 80)
 try:
     notifier = EmailNotifier(
-        to=["test@example.com"],
-        subject="Günlük Rapor - {date:%d.%m.%Y}"
+        to=["test@example.com"], subject="Günlük Rapor - {date:%d.%m.%Y}"
     )
     test_date = datetime(2025, 12, 2, 10, 30, 0)
     subject = notifier._get_email_subject(anomaly_date=test_date)

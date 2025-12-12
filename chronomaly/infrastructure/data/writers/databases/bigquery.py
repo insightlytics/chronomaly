@@ -29,8 +29,8 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
     """
 
     # Valid disposition values
-    VALID_CREATE_DISPOSITIONS = {'CREATE_IF_NEEDED', 'CREATE_NEVER'}
-    VALID_WRITE_DISPOSITIONS = {'WRITE_TRUNCATE', 'WRITE_APPEND', 'WRITE_EMPTY'}
+    VALID_CREATE_DISPOSITIONS = {"CREATE_IF_NEEDED", "CREATE_NEVER"}
+    VALID_WRITE_DISPOSITIONS = {"WRITE_TRUNCATE", "WRITE_APPEND", "WRITE_EMPTY"}
 
     def __init__(
         self,
@@ -38,9 +38,9 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
         project: Optional[str] = None,
         dataset: str = None,
         table: str = None,
-        create_disposition: str = 'CREATE_IF_NEEDED',
-        write_disposition: str = 'WRITE_TRUNCATE',
-        transformers: Optional[Dict[str, List[Callable]]] = None
+        create_disposition: str = "CREATE_IF_NEEDED",
+        write_disposition: str = "WRITE_TRUNCATE",
+        transformers: Optional[Dict[str, List[Callable]]] = None,
     ):
         if dataset is None:
             raise ValueError("dataset parameter is required")
@@ -67,9 +67,7 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
             # Resolve to absolute path and check if it exists
             abs_path = os.path.abspath(service_account_file)
             if not os.path.isfile(abs_path):
-                raise FileNotFoundError(
-                    f"Service account file not found: {abs_path}"
-                )
+                raise FileNotFoundError(f"Service account file not found: {abs_path}")
 
             # Check file is readable
             if not os.access(abs_path, os.R_OK):
@@ -78,7 +76,7 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
                 )
 
             # Basic validation that it's a JSON file
-            if not abs_path.endswith('.json'):
+            if not abs_path.endswith(".json"):
                 raise ValueError(
                     "Service account file must be a JSON file (.json extension)"
                 )
@@ -104,13 +102,11 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
         if self._client is None:
             if self.service_account_file:
                 self._client = bigquery.Client.from_service_account_json(
-                    self.service_account_file,
-                    project=self.project
+                    self.service_account_file, project=self.project
                 )
             else:
                 self._client = bigquery.Client(project=self.project)
         return self._client
-
 
     def write(self, dataframe: pd.DataFrame) -> None:
         """
@@ -123,7 +119,7 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
             RuntimeError: If the BigQuery write job fails
         """
         # Apply transformers before writing data
-        dataframe = self._apply_transformers(dataframe, 'before')
+        dataframe = self._apply_transformers(dataframe, "before")
 
         client = self._get_client()
 
@@ -137,24 +133,32 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
         bigquery_job_config = bigquery.LoadJobConfig()
 
         # Set create disposition
-        if self.create_disposition == 'CREATE_IF_NEEDED':
-            bigquery_job_config.create_disposition = bigquery.CreateDisposition.CREATE_IF_NEEDED
-        elif self.create_disposition == 'CREATE_NEVER':
-            bigquery_job_config.create_disposition = bigquery.CreateDisposition.CREATE_NEVER
+        if self.create_disposition == "CREATE_IF_NEEDED":
+            bigquery_job_config.create_disposition = (
+                bigquery.CreateDisposition.CREATE_IF_NEEDED
+            )
+        elif self.create_disposition == "CREATE_NEVER":
+            bigquery_job_config.create_disposition = (
+                bigquery.CreateDisposition.CREATE_NEVER
+            )
 
         # Set write disposition
-        if self.write_disposition == 'WRITE_TRUNCATE':
-            bigquery_job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-        elif self.write_disposition == 'WRITE_APPEND':
-            bigquery_job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
-        elif self.write_disposition == 'WRITE_EMPTY':
-            bigquery_job_config.write_disposition = bigquery.WriteDisposition.WRITE_EMPTY
+        if self.write_disposition == "WRITE_TRUNCATE":
+            bigquery_job_config.write_disposition = (
+                bigquery.WriteDisposition.WRITE_TRUNCATE
+            )
+        elif self.write_disposition == "WRITE_APPEND":
+            bigquery_job_config.write_disposition = (
+                bigquery.WriteDisposition.WRITE_APPEND
+            )
+        elif self.write_disposition == "WRITE_EMPTY":
+            bigquery_job_config.write_disposition = (
+                bigquery.WriteDisposition.WRITE_EMPTY
+            )
 
         # Load dataframe to BigQuery using table_id string
         job = client.load_table_from_dataframe(
-            dataframe,
-            table_id,
-            job_config=bigquery_job_config
+            dataframe, table_id, job_config=bigquery_job_config
         )
 
         # Wait for the job to complete with proper error handling

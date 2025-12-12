@@ -25,13 +25,13 @@ class TestTimesFMForecaster:
         forecaster = TimesFMForecaster()
 
         # Create MultiIndex dataframe with datetime in first level
-        dates = pd.date_range('2024-01-01', periods=3)
-        stores = ['store1', 'store2']
-        index = pd.MultiIndex.from_product([dates, stores], names=['date', 'store'])
-        df = pd.DataFrame({
-            'product_a': np.random.randn(6),
-            'product_b': np.random.randn(6)
-        }, index=index)
+        dates = pd.date_range("2024-01-01", periods=3)
+        stores = ["store1", "store2"]
+        index = pd.MultiIndex.from_product([dates, stores], names=["date", "store"])
+        df = pd.DataFrame(
+            {"product_a": np.random.randn(6), "product_b": np.random.randn(6)},
+            index=index,
+        )
 
         # This should work without redundant conversion
         last_date = forecaster._get_last_date(df)
@@ -47,15 +47,15 @@ class TestTimesFMForecaster:
 
         forecaster = TimesFMForecaster()
 
-        df = pd.DataFrame({
-            'product_a': [1, 2, 3],
-            'product_b': [4, 5, 6]
-        }, index=pd.date_range('2024-01-01', periods=3))
+        df = pd.DataFrame(
+            {"product_a": [1, 2, 3], "product_b": [4, 5, 6]},
+            index=pd.date_range("2024-01-01", periods=3),
+        )
 
         last_date = forecaster._get_last_date(df)
 
         assert isinstance(last_date, pd.Timestamp)
-        assert last_date == pd.Timestamp('2024-01-03')
+        assert last_date == pd.Timestamp("2024-01-03")
 
     def test_get_last_date_with_invalid_index_raises_error(self):
         """Test that _get_last_date raises proper error for non-datetime index"""
@@ -66,10 +66,9 @@ class TestTimesFMForecaster:
 
         forecaster = TimesFMForecaster()
 
-        df = pd.DataFrame({
-            'product_a': [1, 2, 3],
-            'product_b': [4, 5, 6]
-        }, index=['a', 'b', 'c'])
+        df = pd.DataFrame(
+            {"product_a": [1, 2, 3], "product_b": [4, 5, 6]}, index=["a", "b", "c"]
+        )
 
         with pytest.raises(ValueError, match="Could not parse index value"):
             forecaster._get_last_date(df)

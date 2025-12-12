@@ -65,7 +65,11 @@ class EmailNotifier(Notifier, TransformableMixin):
             to=["team@example.com"],
             transformers={
                 'before': [
-                    ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER'], mode='include'),
+                    ValueFilter(
+                        'status',
+                        values=['BELOW_LOWER', 'ABOVE_UPPER'],
+                        mode='include'
+                    ),
                     ValueFilter('deviation_pct', min_value=0.1)  # 10%+ deviation only
                 ]
             }
@@ -121,7 +125,7 @@ class EmailNotifier(Notifier, TransformableMixin):
         to: list[str] | str,
         subject: Optional[str] = None,
         transformers: Optional[Dict[str, list[Callable]]] = None,
-        chart_data_reader: Optional[Any] = None
+        chart_data_reader: Optional[Any] = None,
     ):
         # Validate and normalize recipients
         if isinstance(to, str):
@@ -141,12 +145,12 @@ class EmailNotifier(Notifier, TransformableMixin):
 
         # Get SMTP configuration from internal method
         smtp_config = self._get_smtp_config()
-        self.smtp_host: str = smtp_config['host']
-        self.smtp_port: int = smtp_config['port']
-        self.smtp_user: str = smtp_config['user']
-        self.smtp_password: str = smtp_config['password']
-        self.from_email: str = smtp_config['from_email']
-        self.use_tls: bool = smtp_config['use_tls']
+        self.smtp_host: str = smtp_config["host"]
+        self.smtp_port: int = smtp_config["port"]
+        self.smtp_user: str = smtp_config["user"]
+        self.smtp_password: str = smtp_config["password"]
+        self.from_email: str = smtp_config["from_email"]
+        self.use_tls: bool = smtp_config["use_tls"]
 
         # Validate SMTP credentials
         self._validate_smtp_config()
@@ -172,12 +176,13 @@ class EmailNotifier(Notifier, TransformableMixin):
         import os
 
         return {
-            'host': os.getenv('SMTP_HOST', 'smtp.gmail.com'),
-            'port': int(os.getenv('SMTP_PORT', '587')),
-            'user': os.getenv('SMTP_USER', ''),
-            'password': os.getenv('SMTP_PASSWORD', ''),
-            'from_email': os.getenv('SMTP_FROM_EMAIL', os.getenv('SMTP_USER', '')),
-            'use_tls': os.getenv('SMTP_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+            "host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
+            "port": int(os.getenv("SMTP_PORT", "587")),
+            "user": os.getenv("SMTP_USER", ""),
+            "password": os.getenv("SMTP_PASSWORD", ""),
+            "from_email": os.getenv("SMTP_FROM_EMAIL", os.getenv("SMTP_USER", "")),
+            "use_tls": os.getenv("SMTP_USE_TLS", "True").lower()
+            in ("true", "1", "yes"),
         }
 
     def _validate_smtp_config(self) -> None:
@@ -240,7 +245,7 @@ class EmailNotifier(Notifier, TransformableMixin):
         # Replace {date} placeholders if anomaly_date is provided
         if anomaly_date is not None:
             # Replace {date:FORMAT} placeholders with custom format
-            date_format_pattern = r'\{date:([^}]+)\}'
+            date_format_pattern = r"\{date:([^}]+)\}"
             matches = re.finditer(date_format_pattern, subject)
             for match in matches:
                 format_string = match.group(1)
@@ -249,13 +254,14 @@ class EmailNotifier(Notifier, TransformableMixin):
                     subject = subject.replace(match.group(0), formatted_date)
                 except (ValueError, TypeError) as e:
                     import warnings
+
                     warnings.warn(
                         f"Invalid date format '{format_string}' in email subject. "
                         f"Error: {str(e)}"
                     )
 
             # Replace simple {date} placeholder (must be done after custom formats)
-            subject = subject.replace('{date}', anomaly_date.strftime('%Y-%m-%d'))
+            subject = subject.replace("{date}", anomaly_date.strftime("%Y-%m-%d"))
 
         return subject
 
@@ -271,7 +277,8 @@ class EmailNotifier(Notifier, TransformableMixin):
             str: Base64-encoded PNG image
         """
         import matplotlib
-        matplotlib.use('Agg')  # Non-interactive backend
+
+        matplotlib.use("Agg")  # Non-interactive backend
         import matplotlib.pyplot as plt
         import matplotlib.dates
         import io
@@ -281,25 +288,32 @@ class EmailNotifier(Notifier, TransformableMixin):
         plt.figure(figsize=(8, 4.5))
 
         # Plot line chart with markers
-        plt.plot(data.index, data.values, marker='o', linewidth=2, markersize=6, color='#2E86AB')
+        plt.plot(
+            data.index,
+            data.values,
+            marker="o",
+            linewidth=2,
+            markersize=6,
+            color="#2E86AB",
+        )
 
         # Grid
         plt.grid(True, alpha=0.3)
 
         # Format x-axis dates
         ax = plt.gca()
-        ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y-%m-%d"))
         ax.xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=2))
-        plt.xticks(rotation=45, ha='right')
+        plt.xticks(rotation=45, ha="right")
 
         # Tight layout
         plt.tight_layout()
 
         # Convert to base64
         buffer = io.BytesIO()
-        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        plt.savefig(buffer, format="png", dpi=100, bbox_inches="tight")
         buffer.seek(0)
-        image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+        image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
         plt.close()
 
         return image_base64
@@ -320,12 +334,12 @@ class EmailNotifier(Notifier, TransformableMixin):
         # Load chart data
         try:
             chart_data = self.chart_data_reader.load()
-        except Exception as e:
+        except Exception:
             # If chart data loading fails, skip charts
             return {}
 
         # Get unique metrics from anomalies
-        anomalous_metrics = anomalies_df['metric'].unique()
+        anomalous_metrics = anomalies_df["metric"].unique()
 
         # Generate charts for each metric
         charts = {}
@@ -341,6 +355,7 @@ class EmailNotifier(Notifier, TransformableMixin):
                         charts[metric] = chart_base64
                     except (ValueError, TypeError, RuntimeError) as e:
                         import warnings
+
                         warnings.warn(
                             f"Failed to generate chart for metric '{metric}': {str(e)}"
                         )
@@ -362,10 +377,10 @@ class EmailNotifier(Notifier, TransformableMixin):
             RuntimeError: If email sending fails
         """
         # Extract anomalies DataFrame
-        if 'anomalies' not in payload:
+        if "anomalies" not in payload:
             raise ValueError("Payload must contain 'anomalies' key with DataFrame")
 
-        anomalies_df = payload['anomalies']
+        anomalies_df = payload["anomalies"]
 
         if not isinstance(anomalies_df, pd.DataFrame):
             raise TypeError(
@@ -374,19 +389,20 @@ class EmailNotifier(Notifier, TransformableMixin):
 
         # Extract anomaly date from the DataFrame if a 'date' column exists
         anomaly_date = None
-        if 'date' in anomalies_df.columns:
+        if "date" in anomalies_df.columns:
             try:
                 # Try to get the most recent (max) date from the data
-                date_series = pd.to_datetime(anomalies_df['date'])
+                date_series = pd.to_datetime(anomalies_df["date"])
                 anomaly_date = date_series.max()
                 # Check if result is NaT (happens when all dates are NaT)
                 if pd.isna(anomaly_date):
                     anomaly_date = None
                 # Convert to Python datetime if it's a Timestamp
-                elif hasattr(anomaly_date, 'to_pydatetime'):
+                elif hasattr(anomaly_date, "to_pydatetime"):
                     anomaly_date = anomaly_date.to_pydatetime()
             except (ValueError, TypeError) as e:
                 import warnings
+
                 warnings.warn(
                     f"Failed to extract date from anomalies DataFrame: {str(e)}"
                 )
@@ -400,7 +416,7 @@ class EmailNotifier(Notifier, TransformableMixin):
         charts = self._generate_charts(anomalies_df)
 
         # Apply transformers (e.g., filter only significant anomalies, select columns)
-        filtered_df = self._apply_transformers(anomalies_df, 'before')
+        filtered_df = self._apply_transformers(anomalies_df, "before")
 
         # Skip notification if no data after filtering
         if filtered_df.empty:
@@ -408,7 +424,7 @@ class EmailNotifier(Notifier, TransformableMixin):
 
         # Create a mapping of row data to charts
         # If metric column exists in filtered_df, use it; otherwise use row index
-        if 'metric' in filtered_df.columns:
+        if "metric" in filtered_df.columns:
             # Standard case: metric column present
             chart_mapping = charts
         else:
@@ -416,8 +432,8 @@ class EmailNotifier(Notifier, TransformableMixin):
             chart_mapping = {}
             for idx, row in filtered_df.iterrows():
                 # Find corresponding metric in original df
-                if idx in anomalies_df.index and 'metric' in anomalies_df.columns:
-                    metric = anomalies_df.loc[idx, 'metric']
+                if idx in anomalies_df.index and "metric" in anomalies_df.columns:
+                    metric = anomalies_df.loc[idx, "metric"]
                     if metric in charts:
                         chart_mapping[idx] = charts[metric]
 
@@ -427,7 +443,9 @@ class EmailNotifier(Notifier, TransformableMixin):
         # Send email
         self._send_email(html_body)
 
-    def _generate_html_body(self, df: pd.DataFrame, charts: Optional[Dict[str, str]] = None) -> str:
+    def _generate_html_body(
+        self, df: pd.DataFrame, charts: Optional[Dict[str, str]] = None
+    ) -> str:
         """
         Generate HTML email body with styled table and optional charts.
 
@@ -443,51 +461,51 @@ class EmailNotifier(Notifier, TransformableMixin):
         # Helper function to format numeric values
         def format_value(val: Any) -> str:
             if pd.isna(val):
-                return '-'
+                return "-"
             if isinstance(val, (int, float)):
-                return f'{val:.2f}'
+                return f"{val:.2f}"
             return str(val)
 
         # Helper function to get status color
         def get_status_style(status: Any) -> str:
             if pd.isna(status):
-                return ''
+                return ""
             status_upper = str(status).upper()
-            if 'BELOW' in status_upper:
-                return 'color: #2196F3; font-weight: bold;'
-            elif 'ABOVE' in status_upper:
-                return 'color: #f44336; font-weight: bold;'
-            elif 'IN_RANGE' in status_upper or 'IN RANGE' in status_upper:
-                return 'color: #4CAF50;'
-            elif 'NO_FORECAST' in status_upper or 'NO FORECAST' in status_upper:
-                return 'color: #9E9E9E;'
-            return ''
+            if "BELOW" in status_upper:
+                return "color: #2196F3; font-weight: bold;"
+            elif "ABOVE" in status_upper:
+                return "color: #f44336; font-weight: bold;"
+            elif "IN_RANGE" in status_upper or "IN RANGE" in status_upper:
+                return "color: #4CAF50;"
+            elif "NO_FORECAST" in status_upper or "NO FORECAST" in status_upper:
+                return "color: #9E9E9E;"
+            return ""
 
         # Build table HTML manually
         table_html = '<table class="anomaly-table">'
 
         # Table header
-        table_html += '<thead><tr>'
+        table_html += "<thead><tr>"
         for col in df.columns:
-            table_html += f'<th>{col}</th>'
+            table_html += f"<th>{col}</th>"
         if charts:
-            table_html += '<th>Chart</th>'
-        table_html += '</tr></thead>'
+            table_html += "<th>Chart</th>"
+        table_html += "</tr></thead>"
 
         # Table body
-        table_html += '<tbody>'
+        table_html += "<tbody>"
         for idx, row in df.iterrows():
-            table_html += '<tr>'
+            table_html += "<tr>"
             for col in df.columns:
                 val = row[col]
                 formatted_val = format_value(val)
 
                 # Apply status styling
-                if col == 'status':
+                if col == "status":
                     style = get_status_style(val)
                     table_html += f'<td style="{style}">{formatted_val}</td>'
                 else:
-                    table_html += f'<td>{formatted_val}</td>'
+                    table_html += f"<td>{formatted_val}</td>"
 
             # Add chart column if charts exist
             if charts:
@@ -495,9 +513,9 @@ class EmailNotifier(Notifier, TransformableMixin):
                 chart_base64 = None
                 chart_key = None
 
-                if 'metric' in df.columns:
+                if "metric" in df.columns:
                     # Standard case: use metric column
-                    metric_name = row.get('metric', '')
+                    metric_name = row.get("metric", "")
                     if metric_name in charts:
                         chart_base64 = charts[metric_name]
                         chart_key = metric_name
@@ -512,8 +530,8 @@ class EmailNotifier(Notifier, TransformableMixin):
                 else:
                     table_html += '<td class="chart-cell">-</td>'
 
-            table_html += '</tr>'
-        table_html += '</tbody></table>'
+            table_html += "</tr>"
+        table_html += "</tbody></table>"
 
         # Email header with CSS
         html = """
@@ -616,13 +634,15 @@ class EmailNotifier(Notifier, TransformableMixin):
         """
         try:
             # Create message
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = self._get_email_subject(getattr(self, '_current_anomaly_date', None))
-            msg['From'] = self.from_email
-            msg['To'] = ', '.join(self.to)
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = self._get_email_subject(
+                getattr(self, "_current_anomaly_date", None)
+            )
+            msg["From"] = self.from_email
+            msg["To"] = ", ".join(self.to)
 
             # Attach HTML content
-            html_part = MIMEText(html_body, 'html')
+            html_part = MIMEText(html_body, "html")
             msg.attach(html_part)
 
             # Connect to SMTP server and send
@@ -642,10 +662,6 @@ class EmailNotifier(Notifier, TransformableMixin):
                 f"SMTP authentication failed. Check username and password: {str(e)}"
             ) from e
         except smtplib.SMTPException as e:
-            raise RuntimeError(
-                f"Failed to send email via SMTP: {str(e)}"
-            ) from e
+            raise RuntimeError(f"Failed to send email via SMTP: {str(e)}") from e
         except Exception as e:
-            raise RuntimeError(
-                f"Unexpected error while sending email: {str(e)}"
-            ) from e
+            raise RuntimeError(f"Unexpected error while sending email: {str(e)}") from e

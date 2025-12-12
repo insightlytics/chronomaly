@@ -38,7 +38,7 @@ class SQLiteDataReader(DataReader, TransformableMixin):
         query: str,
         date_column: Optional[str] = None,
         transformers: Optional[Dict[str, List[Callable]]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         # BUG-19 FIX: Validate database path to prevent path traversal
         if not database_path:
@@ -49,15 +49,11 @@ class SQLiteDataReader(DataReader, TransformableMixin):
 
         # Check if file exists
         if not os.path.isfile(abs_path):
-            raise FileNotFoundError(
-                f"Database file not found: {abs_path}"
-            )
+            raise FileNotFoundError(f"Database file not found: {abs_path}")
 
         # Check if file is readable
         if not os.access(abs_path, os.R_OK):
-            raise PermissionError(
-                f"Database file is not readable: {abs_path}"
-            )
+            raise PermissionError(f"Database file is not readable: {abs_path}")
 
         self.database_path = abs_path
 
@@ -88,26 +84,26 @@ class SQLiteDataReader(DataReader, TransformableMixin):
         query_lower = query.lower()
 
         # Check for multiple statements
-        if query.count(';') > 1:
+        if query.count(";") > 1:
             raise ValueError(
                 "Query contains multiple statements. "
                 "Only single SQL statements are allowed."
             )
 
         # Remove trailing semicolons
-        query_check = query_lower.rstrip('; \t\n')
+        query_check = query_lower.rstrip("; \t\n")
 
         # Check for SQL comments
-        if '--' in query_check or '/*' in query_check:
+        if "--" in query_check or "/*" in query_check:
             raise ValueError(
                 "SQL comments are not allowed in queries for security reasons"
             )
 
         # Check for dangerous keywords
-        dangerous_keywords = ['drop', 'delete', 'truncate', 'alter', 'create']
+        dangerous_keywords = ["drop", "delete", "truncate", "alter", "create"]
         for keyword in dangerous_keywords:
-            if re.search(r'\b' + keyword + r'\b', query_lower):
-                if not query_lower.strip().startswith('select'):
+            if re.search(r"\b" + keyword + r"\b", query_lower):
+                if not query_lower.strip().startswith("select"):
                     raise ValueError(
                         f"Query contains potentially dangerous keyword: {keyword}. "
                         f"Only SELECT queries are recommended."
@@ -134,7 +130,7 @@ class SQLiteDataReader(DataReader, TransformableMixin):
                 df[self.date_column] = pd.to_datetime(df[self.date_column])
 
             # Apply transformers after loading data
-            df = self._apply_transformers(df, 'after')
+            df = self._apply_transformers(df, "after")
 
             return df
         finally:

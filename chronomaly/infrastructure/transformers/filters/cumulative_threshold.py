@@ -39,10 +39,12 @@ class CumulativeThresholdFilter(DataFrameFilter):
         self,
         value_column: str,
         threshold_pct: float = 0.95,
-        exclude_columns: Optional[List[str]] = None
+        exclude_columns: Optional[List[str]] = None,
     ):
         if not 0 < threshold_pct <= 1.0:
-            raise ValueError(f"threshold_pct must be between 0 and 1, got {threshold_pct}")
+            raise ValueError(
+                f"threshold_pct must be between 0 and 1, got {threshold_pct}"
+            )
 
         self.value_column: str = value_column
         self.threshold_pct: float = threshold_pct
@@ -77,8 +79,10 @@ class CumulativeThresholdFilter(DataFrameFilter):
         if threshold_mask.any():
             # Use position-based indexing (argmax + iloc) instead of label-based (idxmax + loc)
             # to handle DataFrames with non-sequential indices correctly
-            first_exceed_pos = threshold_mask.argmax()  # Position of first True (0-based)
-            min_threshold = sorted_values.iloc[:first_exceed_pos + 1].min()
+            first_exceed_pos = (
+                threshold_mask.argmax()
+            )  # Position of first True (0-based)
+            min_threshold = sorted_values.iloc[: first_exceed_pos + 1].min()
         else:
             min_threshold = sorted_values.min()
 

@@ -38,27 +38,22 @@ class BigQueryDataReader(DataReader, TransformableMixin):
         project: str,
         query: str,
         date_column: Optional[str] = None,
-        transformers: Optional[Dict[str, List[Callable]]] = None
+        transformers: Optional[Dict[str, List[Callable]]] = None,
     ):
-        # BUG-25 FIX: Validate service account file path
         if not service_account_file:
             raise ValueError("service_account_file cannot be empty")
 
         # Resolve to absolute path and check if it exists
         abs_path = os.path.abspath(service_account_file)
         if not os.path.isfile(abs_path):
-            raise FileNotFoundError(
-                f"Service account file not found: {abs_path}"
-            )
+            raise FileNotFoundError(f"Service account file not found: {abs_path}")
 
         # Check file is readable
         if not os.access(abs_path, os.R_OK):
-            raise PermissionError(
-                f"Service account file is not readable: {abs_path}"
-            )
+            raise PermissionError(f"Service account file is not readable: {abs_path}")
 
         # Basic validation that it's a JSON file
-        if not abs_path.endswith('.json'):
+        if not abs_path.endswith(".json"):
             raise ValueError(
                 "Service account file must be a JSON file (.json extension)"
             )
@@ -66,7 +61,6 @@ class BigQueryDataReader(DataReader, TransformableMixin):
         self.service_account_file = abs_path
         self.project = project
 
-        # BUG-13 FIX: Add basic SQL injection protection
         if not query or not query.strip():
             raise ValueError("Query cannot be empty")
 
@@ -95,28 +89,28 @@ class BigQueryDataReader(DataReader, TransformableMixin):
         query_lower = query.lower()
 
         # Check for multiple statements (basic check)
-        if query.count(';') > 1:
+        if query.count(";") > 1:
             raise ValueError(
                 "Query contains multiple statements. "
                 "Only single SQL statements are allowed."
             )
 
         # Remove trailing semicolons for further checks
-        query_check = query_lower.rstrip('; \t\n')
+        query_check = query_lower.rstrip("; \t\n")
 
         # Check for SQL comments that might hide malicious code
-        if '--' in query_check or '/*' in query_check:
+        if "--" in query_check or "/*" in query_check:
             raise ValueError(
                 "SQL comments are not allowed in queries for security reasons"
             )
 
         # Warn about dangerous operations (these might be legitimate in some cases)
-        dangerous_keywords = ['drop', 'delete', 'truncate', 'alter', 'create']
+        dangerous_keywords = ["drop", "delete", "truncate", "alter", "create"]
         for keyword in dangerous_keywords:
             # Use word boundaries to avoid false positives
-            if re.search(r'\b' + keyword + r'\b', query_lower):
+            if re.search(r"\b" + keyword + r"\b", query_lower):
                 # Allow these in SELECT statements only
-                if not query_lower.strip().startswith('select'):
+                if not query_lower.strip().startswith("select"):
                     raise ValueError(
                         f"Query contains potentially dangerous keyword: {keyword}. "
                         f"Only SELECT queries are recommended."
@@ -136,13 +130,10 @@ class BigQueryDataReader(DataReader, TransformableMixin):
                 )
 
                 self._client = bigquery.Client(
-                    credentials=credentials,
-                    project=self.project
+                    credentials=credentials, project=self.project
                 )
             except Exception as e:
-                raise RuntimeError(
-                    f"Failed to create BigQuery client: {str(e)}"
-                ) from e
+                raise RuntimeError(f"Failed to create BigQuery client: {str(e)}") from e
 
         return self._client
 
@@ -173,7 +164,9 @@ class BigQueryDataReader(DataReader, TransformableMixin):
             elif "Not found" in str(e):
                 error_msg = f"Table or dataset not found: {str(e)}"
             elif "Access Denied" in str(e) or "Permission" in str(e):
-                error_msg = f"Permission denied. Check service account permissions: {str(e)}"
+                error_msg = (
+                    f"Permission denied. Check service account permissions: {str(e)}"
+                )
 
             raise RuntimeError(error_msg) from e
 
@@ -199,7 +192,7 @@ class BigQueryDataReader(DataReader, TransformableMixin):
                 ) from e
 
         # Apply transformers after loading data
-        df = self._apply_transformers(df, 'after')
+        df = self._apply_transformers(df, "after")
 
         return df
 

@@ -61,7 +61,7 @@ class AnomalyDetectionWorkflow:
         forecast_reader: DataReader,
         actual_reader: DataReader,
         anomaly_detector: AnomalyDetector,
-        data_writer: Optional[DataWriter] = None
+        data_writer: Optional[DataWriter] = None,
     ):
         self.forecast_reader = forecast_reader
         self.actual_reader = actual_reader
@@ -98,8 +98,7 @@ class AnomalyDetectionWorkflow:
 
         # Step 3: Detect anomalies
         anomaly_df = self.anomaly_detector.detect(
-            forecast_df=forecast_df,
-            actual_df=actual_df
+            forecast_df=forecast_df, actual_df=actual_df
         )
 
         if anomaly_df is None or anomaly_df.empty:

@@ -16,9 +16,7 @@ class AnomalyDetector(ABC):
 
     @abstractmethod
     def detect(
-        self,
-        forecast_df: pd.DataFrame,
-        actual_df: pd.DataFrame
+        self, forecast_df: pd.DataFrame, actual_df: pd.DataFrame
     ) -> pd.DataFrame:
         """
         Detect anomalies by comparing forecast and actual data.
