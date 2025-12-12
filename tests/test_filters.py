@@ -124,7 +124,10 @@ class TestValueFilter:
         """Test that creating filter without parameters raises error."""
         with pytest.raises(
             ValueError,
-            match="At least one of 'values', 'min_value', or 'max_value' must be specified",
+            match=(
+                "At least one of 'values', 'min_value', "
+                "or 'max_value' must be specified"
+            ),
         ):
             ValueFilter("column")
 

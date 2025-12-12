@@ -456,7 +456,10 @@ class TestDimensionExtraction:
 
 
 @pytest.mark.skip(
-    reason="Filtering features should be tested with separate Filter classes, not Detector"
+    reason=(
+        "Filtering features should be tested with separate Filter classes, "
+        "not Detector"
+    )
 )
 class TestFilteringOptions:
     """Test cases for filtering options."""

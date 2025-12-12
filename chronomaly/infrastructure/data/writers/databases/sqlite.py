@@ -21,7 +21,6 @@ class SQLiteDataWriter(DataWriter, TransformableMixin):
         if_exists: How to behave if table exists {'fail', 'replace', 'append'}
                    (default: 'replace')
         transformers: Optional dict of transformer lists to apply before/after writing
-                     Example: {'before': [Filter1(), Filter2()]}
         **kwargs: Additional arguments to pass to pandas.to_sql()
 
     Security Notes:
@@ -132,11 +131,13 @@ class SQLiteDataWriter(DataWriter, TransformableMixin):
 
         except sqlite3.Error as e:
             raise RuntimeError(
-                f"SQLite database error while writing to table '{self.table_name}': {str(e)}"
+                f"SQLite database error while writing to table "
+                f"'{self.table_name}': {str(e)}"
             ) from e
         except Exception as e:
             raise RuntimeError(
-                f"Failed to write data to SQLite database '{self.database_path}': {str(e)}"
+                f"Failed to write data to SQLite database "
+                f"'{self.database_path}': {str(e)}"
             ) from e
         finally:
             if conn is not None:

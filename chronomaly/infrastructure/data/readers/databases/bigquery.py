@@ -22,8 +22,6 @@ class BigQueryDataReader(DataReader, TransformableMixin):
         query: SQL query to execute
         date_column: Name of the date column (will be parsed as datetime)
         transformers: Optional dict of transformer lists to apply after loading data
-                     Example: {'after': [Filter1(), Filter2()]}
-                     Note: 'before' stage not supported for readers
 
     Security Notes:
         - The query parameter is executed directly on BigQuery. Ensure queries
@@ -188,7 +186,8 @@ class BigQueryDataReader(DataReader, TransformableMixin):
                 df[self.date_column] = pd.to_datetime(df[self.date_column])
             except Exception as e:
                 raise ValueError(
-                    f"Failed to parse date_column '{self.date_column}' as datetime: {str(e)}"
+                    f"Failed to parse date_column '{self.date_column}' "
+                    f"as datetime: {str(e)}"
                 ) from e
 
         # Apply transformers after loading data

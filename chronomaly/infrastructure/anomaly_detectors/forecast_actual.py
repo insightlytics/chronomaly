@@ -14,7 +14,8 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
     Anomaly detector that compares forecast quantiles with actual values.
 
     This detector focuses SOLELY on anomaly detection. Data transformations
-    (filtering, formatting, pivoting) should be configured via the transformers parameter.
+    (filtering, formatting, pivoting) should be configured via the
+    transformers parameter.
 
     Note: The actual_df should be already pivoted before passing to detect() method.
     Use PivotTransformer outside the detector if needed.
@@ -26,8 +27,6 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         lower_quantile_idx: Index of lower confidence bound (default: 1 for q10)
         upper_quantile_idx: Index of upper confidence bound (default: 9 for q90)
         transformers: Optional dict of transformer lists to apply after detection
-                     Example: {'after': [Filter1(), Filter2()]}
-                     Note: 'before' stage not supported for detectors
     """
 
     QUANTILE_POINT_IDX = 0
@@ -122,9 +121,10 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
         for indicator in long_format_indicators:
             if indicator in df_columns_lower:
                 raise ValueError(
-                    f"actual_df appears to be in long format (contains '{indicator}' column). "
-                    f"Please pivot the data using PivotTransformer before passing to detect(). "
-                    f"Example: actual_df_pivoted = PivotTransformer(...)(actual_df)"
+                    f"actual_df appears to be in long format "
+                    f"(contains '{indicator}' column). "
+                    f"Please pivot the data using PivotTransformer "
+                    f"before passing to detect(). "
                 )
 
         # Check that we have more than just the date column
@@ -227,7 +227,8 @@ class ForecastActualAnomalyDetector(AnomalyDetector, TransformableMixin):
 
             if len(forecast_parts) < self.EXPECTED_QUANTILE_COUNT:
                 warnings.warn(
-                    f"Expected {self.EXPECTED_QUANTILE_COUNT} quantiles, got {len(forecast_parts)}."
+                    f"Expected {self.EXPECTED_QUANTILE_COUNT} quantiles, "
+                    f"got {len(forecast_parts)}."
                 )
         except (ValueError, IndexError):
             point_forecast = lower_bound = upper_bound = 0.0

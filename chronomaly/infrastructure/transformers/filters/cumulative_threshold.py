@@ -21,18 +21,6 @@ class CumulativeThresholdFilter(DataFrameFilter):
         value_column: Column to use for cumulative calculation
         threshold_pct: Cumulative percentage threshold (e.g., 0.95 for top 95%)
         exclude_columns: Columns to exclude from row removal (e.g., ['date'])
-
-    Example - Forecast öncesi:
-        filter = CumulativeThresholdFilter('sessions', threshold_pct=0.95)
-        filtered_data = filter.filter(historical_df)
-
-    Example - Anomaly detection öncesi:
-        filter = CumulativeThresholdFilter('forecast', threshold_pct=0.90)
-        filtered_forecast = filter.filter(forecast_df)
-
-    Example - Anomaly sonrası:
-        filter = CumulativeThresholdFilter('deviation_pct', threshold_pct=0.80)
-        top_anomalies = filter.filter(anomaly_results)
     """
 
     def __init__(
@@ -77,8 +65,9 @@ class CumulativeThresholdFilter(DataFrameFilter):
         # Find minimum threshold value
         threshold_mask = cumulative_pct >= self.threshold_pct
         if threshold_mask.any():
-            # Use position-based indexing (argmax + iloc) instead of label-based (idxmax + loc)
-            # to handle DataFrames with non-sequential indices correctly
+            # Use position-based indexing (argmax + iloc) instead of
+            # label-based (idxmax + loc) to handle DataFrames with
+            # non-sequential indices correctly
             first_exceed_pos = (
                 threshold_mask.argmax()
             )  # Position of first True (0-based)

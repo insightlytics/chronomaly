@@ -115,7 +115,8 @@ class PivotTransformer:
                     import warnings
 
                     warnings.warn(
-                        f"Could not apply string transformations to column '{column}': {str(e)}",
+                        f"Could not apply string transformations to "
+                        f"column '{column}': {str(e)}",
                         UserWarning,
                     )
 

@@ -18,8 +18,6 @@ class DataFrameDataReader(DataReader, TransformableMixin):
     Args:
         dataframe: The pandas DataFrame to wrap
         transformers: Optional dict of transformer lists to apply after loading data
-                     Example: {'after': [Filter1(), Filter2()]}
-                     Note: 'before' stage not supported for readers
     """
 
     def __init__(

@@ -200,7 +200,8 @@ class TestAnomalyDetectionWorkflow:
         assert result is not None
 
     def test_transformer_with_format_method(self):
-        """Test that transformers with .format() method work correctly at component level."""
+        """Test that transformers with .format() method work correctly
+        at component level."""
         mock_forecast_reader = Mock()
         mock_forecast_reader.load.return_value = pd.DataFrame(
             {

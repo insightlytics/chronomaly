@@ -265,7 +265,8 @@ class TestBug007BigQueryDeprecatedAPI:
     @patch("chronomaly.infrastructure.data.writers.databases.bigquery.bigquery.Client")
     def test_uses_table_id_string_not_deprecated_methods(self, mock_client_class):
         """
-        BUG-007: Test that modern table_id string is used instead of deprecated dataset().table().
+        BUG-007: Test that modern table_id string is used instead of
+        deprecated dataset().table().
         """
         # Setup mock
         mock_client = MagicMock()

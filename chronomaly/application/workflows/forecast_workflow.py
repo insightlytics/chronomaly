@@ -25,50 +25,6 @@ class ForecastWorkflow:
         data_reader: Data reader instance (CSV, SQLite, BigQuery, etc.)
         forecaster: Forecaster instance (TimesFM, etc.)
         data_writer: Data writer instance (SQLite, BigQuery, etc.)
-
-    Example:
-        from chronomaly.infrastructure.transformers.pivot import PivotTransformer
-        from chronomaly.infrastructure.transformers.filters import ValueFilter
-        from chronomaly.infrastructure.transformers.formatters import ColumnFormatter
-
-        # Reader with pivot transformation
-        reader = BigQueryDataReader(
-            ...,
-            transformers={
-                'after': [
-                    PivotTransformer(
-                        index=['date'],
-                        columns=['platform', 'channel'],
-                        values='sessions'
-                    )
-                ]
-            }
-        )
-
-        # Forecaster with input/output transformations
-        forecaster = TimesFMForecaster(
-            ...,
-            transformers={
-                'before': [ValueFilter('outliers', max_value=1000, mode='exclude')],
-                'after': [ValueFilter('confidence', min_value=0.8, mode='include')]
-            }
-        )
-
-        # Writer with pre-write transformations
-        writer = BigQueryDataWriter(
-            ...,
-            transformers={
-                'before': [
-                    ColumnFormatter({'forecast': lambda x: round(x, 2)})
-                ]
-            }
-        )
-
-        workflow = ForecastWorkflow(
-            data_reader=reader,
-            forecaster=forecaster,
-            data_writer=writer
-        )
     """
 
     def __init__(
@@ -96,7 +52,8 @@ class ForecastWorkflow:
         # Validate horizon parameter (BUG-011 fix)
         if not isinstance(horizon, int) or horizon <= 0:
             raise ValueError(
-                f"horizon must be a positive integer, got: {horizon} (type: {type(horizon).__name__})"
+                f"horizon must be a positive integer, got: {horizon} "
+                f"(type: {type(horizon).__name__})"
             )
 
         # Step 1: Load data (transformations handled by reader)
@@ -109,7 +66,8 @@ class ForecastWorkflow:
             )
 
         # Step 2: Generate forecast
-        # Check if forecaster supports return_point parameter using inspect (BUG-010 fix)
+        # Check if forecaster supports return_point parameter
+        # using inspect (BUG-010 fix)
         sig = inspect.signature(self.forecaster.forecast)
         supports_return_point = "return_point" in sig.parameters
 
@@ -147,7 +105,8 @@ class ForecastWorkflow:
         # Validate horizon parameter
         if not isinstance(horizon, int) or horizon <= 0:
             raise ValueError(
-                f"horizon must be a positive integer, got: {horizon} (type: {type(horizon).__name__})"
+                f"horizon must be a positive integer, got: {horizon} "
+                f"(type: {type(horizon).__name__})"
             )
 
         # Step 1: Load data (transformations handled by reader)

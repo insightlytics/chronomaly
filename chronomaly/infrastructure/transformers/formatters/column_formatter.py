@@ -17,35 +17,6 @@ class ColumnFormatter(DataFrameFormatter):
     Args:
         formatters: Dict mapping column names to formatting functions
                    Each function should take a single value and return formatted value
-
-    Example 1 - Percentage formatting:
-        formatter = ColumnFormatter.percentage(
-            columns='deviation_pct',
-            decimal_places=1
-        )
-        # 15.3 → "15.3%"
-        formatted = formatter.format(anomaly_df)
-
-    Example 2 - Custom functions:
-        formatter = ColumnFormatter({
-            'revenue': lambda x: f"${x:,.2f}",
-            'sessions': lambda x: f"{x:,}",
-            'date': lambda x: x.strftime('%Y-%m-%d')
-        })
-        formatted = formatter.format(df)
-
-    Example 3 - Status icons:
-        formatter = ColumnFormatter({
-            'status': lambda x: '⚠️' if x in ['BELOW_LOWER', 'ABOVE_UPPER'] else '✓'
-        })
-        formatted = formatter.format(anomaly_df)
-
-    Example 4 - Multiple columns with same format:
-        formatter = ColumnFormatter({
-            'growth_rate': lambda x: f"{x:.1f}%",
-            'change_pct': lambda x: f"{x:.1f}%"
-        })
-        formatted = formatter.format(df)
     """
 
     def __init__(self, formatters: Dict[str, Callable]):
@@ -71,10 +42,6 @@ class ColumnFormatter(DataFrameFormatter):
 
         Returns:
             ColumnFormatter: Formatter configured for percentage formatting
-
-        Example:
-            formatter = ColumnFormatter.percentage('deviation_pct', decimal_places=2)
-            formatted = formatter.format(df)
         """
         if decimal_places < 0:
             raise ValueError(

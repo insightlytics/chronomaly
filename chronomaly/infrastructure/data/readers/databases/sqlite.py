@@ -20,8 +20,6 @@ class SQLiteDataReader(DataReader, TransformableMixin):
         query: SQL query to execute
         date_column: Name of the date column (will be parsed as datetime)
         transformers: Optional dict of transformer lists to apply after loading data
-                     Example: {'after': [Filter1(), Filter2()]}
-                     Note: 'before' stage not supported for readers
         **kwargs: Additional arguments to pass to pandas.read_sql_query()
 
     Security Notes:

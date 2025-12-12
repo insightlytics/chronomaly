@@ -28,32 +28,8 @@ class AnomalyDetectionWorkflow:
         forecast_reader: Data reader for forecast data
         actual_reader: Data reader for actual data
         anomaly_detector: Anomaly detector instance
-        data_writer: Data writer for results (optional, if not provided results won't be written)
-
-    Example:
-        from chronomaly.infrastructure.transformers.filters import ValueFilter
-        from chronomaly.infrastructure.transformers.formatters import ColumnFormatter
-
-        # Configure transformations at component level
-        forecast_reader = BigQueryDataReader(
-            ...,
-            transformers={'after': [ValueFilter('confidence', min_value=0.8)]}
-        )
-
-        data_writer = BigQueryDataWriter(
-            ...,
-            transformers={'before': [
-                ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER']),
-                ColumnFormatter({'deviation_pct': lambda x: f"{x:.1f}%"})
-            ]}
-        )
-
-        workflow = AnomalyDetectionWorkflow(
-            forecast_reader=forecast_reader,
-            actual_reader=actual_reader,
-            anomaly_detector=detector,
-            data_writer=data_writer
-        )
+        data_writer: Data writer for results (optional, if not provided
+            results won't be written)
     """
 
     def __init__(

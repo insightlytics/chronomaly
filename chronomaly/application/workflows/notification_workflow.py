@@ -25,7 +25,8 @@ class NotificationWorkflow:
         # Validate anomalies_data
         if not isinstance(anomalies_data, pd.DataFrame):
             raise TypeError(
-                f"anomalies_data must be a DataFrame, got {type(anomalies_data).__name__}"
+                f"anomalies_data must be a DataFrame, "
+                f"got {type(anomalies_data).__name__}"
             )
 
         if anomalies_data.empty:

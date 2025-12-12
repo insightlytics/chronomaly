@@ -18,7 +18,8 @@ class EmailNotifier(Notifier, TransformableMixin):
     Email notifier for sending anomaly alerts via SMTP.
 
     Sends HTML-formatted emails with anomaly data presented as a styled table.
-    Optionally includes line charts for anomalous metrics when chart_data_reader is provided.
+    Optionally includes line charts for anomalous metrics when
+    chart_data_reader is provided.
     Supports multiple recipients and filtering via transformers.
 
     SMTP credentials are read from environment variables.
@@ -31,86 +32,10 @@ class EmailNotifier(Notifier, TransformableMixin):
                 - {date:FORMAT} - Anomaly date with custom strftime format
                 If not specified, defaults to "Anomaly Detection Alert".
         transformers: Optional transformers to apply before notification
-                     Example: {'before': [ValueFilter(...)]} to filter anomalies
-        chart_data_reader: Optional DataReader for loading historical time series data.
-                          Metric names from anomalies must match column names in the chart data.
-                          Charts are generated as line plots and embedded in the email.
-
-    Example:
-        from chronomaly.infrastructure.notifiers import EmailNotifier
-        from chronomaly.infrastructure.transformers.filters import ValueFilter
-        from chronomaly.infrastructure.transformers.formatters import ColumnSelector
-        from chronomaly.infrastructure.data.readers import BigQueryDataReader
-        from chronomaly.infrastructure.transformers import PivotTransformer
-
-        # Basic usage with default subject
-        notifier = EmailNotifier(
-            to=["team@example.com", "manager@example.com"]
-        )
-
-        # Custom subject with anomaly date
-        notifier = EmailNotifier(
-            to=["team@example.com"],
-            subject="Daily Anomaly Report - {date}"
-        )
-
-        # Custom subject with formatted anomaly date
-        notifier = EmailNotifier(
-            to=["team@example.com"],
-            subject="Anomalies for {date:%d %B %Y}"
-        )
-
-        # With filtering - only notify for significant anomalies
-        notifier = EmailNotifier(
-            to=["team@example.com"],
-            transformers={
-                'before': [
-                    ValueFilter(
-                        'status',
-                        values=['BELOW_LOWER', 'ABOVE_UPPER'],
-                        mode='include'
-                    ),
-                    ValueFilter('deviation_pct', min_value=0.1)  # 10%+ deviation only
-                ]
-            }
-        )
-
-        # With charts - show historical trends for anomalous metrics
-        chart_reader = BigQueryDataReader(
-            service_account_file="/path/to/service-account.json",
-            project="my-project",
-            query=\"\"\"
-                SELECT date, platform, channel, metric_name, SUM(value) AS value
-                FROM `my-project.dataset.table_*`
-                WHERE _TABLE_SUFFIX BETWEEN '20251020' AND '20251116'
-                GROUP BY date, platform, channel, metric_name
-                ORDER BY date
-            \"\"\",
-            date_column="date",
-            transformers={
-                'after': [
-                    PivotTransformer(
-                        index=['date'],
-                        columns=['platform', 'channel', 'metric_name'],
-                        values='value'
-                    )
-                ]
-            }
-        )
-
-        notifier = EmailNotifier(
-            to=["team@example.com"],
-            transformers={
-                'before': [
-                    ColumnSelector(['date', 'metric'], mode='drop')
-                ]
-            },
-            chart_data_reader=chart_reader
-        )
-
-        # Send notification
-        payload = {'anomalies': anomalies_df}
-        notifier.notify(payload)
+        chart_data_reader: Optional DataReader for loading historical
+                          time series data. Metric names from anomalies must
+                          match column names in the chart data. Charts are
+                          generated as line plots and embedded in the email.
 
     Note:
         SMTP configuration is read from environment variables.
@@ -162,14 +87,6 @@ class EmailNotifier(Notifier, TransformableMixin):
         Environment variables are loaded from .env file automatically.
         See .env.example for a template.
 
-        Environment Variables:
-            SMTP_HOST: SMTP server hostname (default: smtp.gmail.com)
-            SMTP_PORT: SMTP server port (default: 587)
-            SMTP_USER: SMTP username/email
-            SMTP_PASSWORD: SMTP password or app password
-            SMTP_FROM_EMAIL: From email address (default: SMTP_USER)
-            SMTP_USE_TLS: Use TLS encryption (default: True)
-
         Returns:
             dict: SMTP configuration parameters
         """
@@ -199,7 +116,8 @@ class EmailNotifier(Notifier, TransformableMixin):
 
         if not isinstance(self.smtp_port, int) or not (1 <= self.smtp_port <= 65535):
             raise ValueError(
-                f"SMTP port must be a valid port number (1-65535), got: {self.smtp_port}"
+                f"SMTP port must be a valid port number (1-65535), "
+                f"got: {self.smtp_port}"
             )
 
         if not self.smtp_user:
@@ -231,13 +149,6 @@ class EmailNotifier(Notifier, TransformableMixin):
 
         Returns:
             str: Processed email subject line
-
-        Examples:
-            Template: "Daily Report - {date}"
-            Result: "Daily Report - 2025-12-02"
-
-            Template: "Report {date:%d.%m.%Y}"
-            Result: "Report 02.12.2025"
         """
         # Use default subject if not specified
         subject = self._subject_template or "Anomaly Detection Alert"
@@ -526,7 +437,11 @@ class EmailNotifier(Notifier, TransformableMixin):
                         chart_key = str(idx)
 
                 if chart_base64:
-                    table_html += f'<td class="chart-cell"><img src="data:image/png;base64,{chart_base64}" alt="{chart_key}" class="chart-img" /></td>'
+                    table_html += (
+                        f'<td class="chart-cell">'
+                        f'<img src="data:image/png;base64,{chart_base64}" '
+                        f'alt="{chart_key}" class="chart-img" /></td>'
+                    )
                 else:
                     table_html += '<td class="chart-cell">-</td>'
 
@@ -615,9 +530,7 @@ class EmailNotifier(Notifier, TransformableMixin):
         </body>
         </html>
         """.format(
-            count=len(df),
-            plural="ies" if len(df) != 1 else "y",
-            table=table_html
+            count=len(df), plural="ies" if len(df) != 1 else "y", table=table_html
         )
 
         return html

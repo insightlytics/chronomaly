@@ -19,30 +19,10 @@ class ValueFilter(DataFrameFilter):
     Args:
         column: Column name to filter on
         values: Value or list of values to keep/exclude (optional)
-        mode: 'include' to keep matching rows, 'exclude' to remove them (default: 'include')
+        mode: 'include' to keep matching rows, 'exclude' to remove them
+              (default: 'include')
         min_value: Minimum value (inclusive), None for no minimum (optional)
         max_value: Maximum value (inclusive), None for no maximum (optional)
-
-    Example 1 - Kategorik filtreleme (sadece anomalileri tut):
-        filter = ValueFilter('status', values=['BELOW_LOWER', 'ABOVE_UPPER'], mode='include')
-        anomalies = filter.filter(results_df)
-
-    Example 2 - Belirli platformları çıkar:
-        filter = ValueFilter('platform', values=['tablet', 'other'], mode='exclude')
-        filtered = filter.filter(data_df)
-
-    Example 3 - Sayısal filtreleme (minimum sapma):
-        filter = ValueFilter('deviation_pct', min_value=10.0)
-        significant = filter.filter(anomaly_df)
-
-    Example 4 - Sayısal aralık:
-        filter = ValueFilter('sessions', min_value=100, max_value=10000)
-        filtered = filter.filter(data_df)
-
-    Example 5 - Her ikisi birlikte:
-        filter = ValueFilter('sessions', values=[100, 200, 300], min_value=150)
-        # First filters to values [100, 200, 300], then applies min_value >= 150
-        # Result: [200, 300]
     """
 
     def __init__(
@@ -56,7 +36,8 @@ class ValueFilter(DataFrameFilter):
         # Validate inputs
         if values is None and min_value is None and max_value is None:
             raise ValueError(
-                "At least one of 'values', 'min_value', or 'max_value' must be specified"
+                "At least one of 'values', 'min_value', or 'max_value' "
+                "must be specified"
             )
 
         if mode not in ["include", "exclude"]:

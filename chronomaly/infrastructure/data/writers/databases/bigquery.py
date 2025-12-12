@@ -25,7 +25,6 @@ class BigQueryDataWriter(DataWriter, TransformableMixin):
         write_disposition: Specifies behavior if table exists
                           (default: WRITE_TRUNCATE - replaces existing data)
         transformers: Optional dict of transformer lists to apply before/after writing
-                     Example: {'before': [Filter1(), Filter2()]}
     """
 
     # Valid disposition values

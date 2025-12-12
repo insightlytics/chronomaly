@@ -36,8 +36,8 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
         fix_quantile_crossing: Fix quantile crossing (default: True)
         frequency: Pandas frequency string for forecast dates (default: 'D' for daily)
                   Common values: 'D' (daily), 'H' (hourly), 'W' (weekly), 'M' (monthly)
-        transformers: Optional dict of transformer lists to apply before/after forecasting
-                     Example: {'before': [Filter1()], 'after': [Filter2()]}
+        transformers: Optional dict of transformer lists to apply
+                      before/after forecasting
         **kwargs: Additional configuration parameters
     """
 
@@ -128,8 +128,10 @@ class TimesFMForecaster(Forecaster, TransformableMixin):
 
         if horizon > self.max_horizon:
             raise ValueError(
-                f"Requested horizon ({horizon}) exceeds max_horizon ({self.max_horizon}). "
-                f"Please reduce horizon or increase max_horizon in forecaster configuration."
+                f"Requested horizon ({horizon}) exceeds "
+                f"max_horizon ({self.max_horizon}). "
+                f"Please reduce horizon or increase max_horizon "
+                f"in forecaster configuration."
             )
 
         # Apply transformers before forecasting (on input data)

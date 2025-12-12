@@ -12,38 +12,13 @@ class ColumnSelector(DataFrameFormatter):
     Select or drop columns from DataFrame.
 
     This formatter allows you to keep only specified columns or drop unwanted columns.
-    Supports both include (keep) and exclude (drop) modes for flexible column management.
+    Supports both include (keep) and exclude (drop) modes for flexible
+    column management.
 
     Args:
         columns: Column name or list of column names to keep or drop
-        mode: 'keep' to keep only specified columns, 'drop' to remove them (default: 'drop')
-
-    Examples:
-        # Drop unwanted columns
-        from chronomaly.infrastructure.transformers.formatters import ColumnSelector
-
-        formatter = ColumnSelector(['internal_id', 'temp_column'], mode='drop')
-        result = formatter.format(df)
-
-        # Keep only specific columns
-        formatter = ColumnSelector(['date', 'metric', 'value'], mode='keep')
-        result = formatter.format(df)
-
-        # Drop single column
-        formatter = ColumnSelector('unwanted_column', mode='drop')
-        result = formatter.format(df)
-
-        # Use in workflow
-        from chronomaly.infrastructure.notifiers import EmailNotifier
-
-        email_notifier = EmailNotifier(
-            to=["team@example.com"],
-            transformers={
-                'before': [
-                    ColumnSelector(['internal_id', 'temp_field'], mode='drop')
-                ]
-            }
-        )
+        mode: 'keep' to keep only specified columns, 'drop' to remove them
+              (default: 'drop')
     """
 
     def __init__(self, columns: Union[str, List[str]], mode: str = "drop"):
@@ -69,7 +44,8 @@ class ColumnSelector(DataFrameFormatter):
             self.columns: list[str] = list(columns)
         else:
             raise TypeError(
-                f"columns must be a string or list of strings, got {type(columns).__name__}"
+                f"columns must be a string or list of strings, "
+                f"got {type(columns).__name__}"
             )
 
         # Validate columns not empty
