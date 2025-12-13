@@ -28,8 +28,32 @@ class ForecastWorkflow:
     """
 
     def __init__(
-        self, data_reader: DataReader, forecaster: Forecaster, data_writer: DataWriter
+        self,
+        data_reader: DataReader,
+        forecaster: Forecaster,
+        data_writer: DataWriter
     ):
+        # Validate data_reader
+        if not isinstance(data_reader, DataReader):
+            raise TypeError(
+                f"data_reader must be a DataReader instance, "
+                f"got {type(data_reader).__name__}"
+            )
+
+        # Validate forecaster
+        if not isinstance(forecaster, Forecaster):
+            raise TypeError(
+                f"forecaster must be a Forecaster instance, "
+                f"got {type(forecaster).__name__}"
+            )
+
+        # Validate data_writer
+        if not isinstance(data_writer, DataWriter):
+            raise TypeError(
+                f"data_writer must be a DataWriter instance, "
+                f"got {type(data_writer).__name__}"
+            )
+
         self.data_reader = data_reader
         self.forecaster = forecaster
         self.data_writer = data_writer

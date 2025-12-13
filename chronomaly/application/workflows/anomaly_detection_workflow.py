@@ -39,6 +39,34 @@ class AnomalyDetectionWorkflow:
         anomaly_detector: AnomalyDetector,
         data_writer: Optional[DataWriter] = None,
     ):
+        # Validate forecast_reader
+        if not isinstance(forecast_reader, DataReader):
+            raise TypeError(
+                f"forecast_reader must be a DataReader instance, "
+                f"got {type(forecast_reader).__name__}"
+            )
+
+        # Validate actual_reader
+        if not isinstance(actual_reader, DataReader):
+            raise TypeError(
+                f"actual_reader must be a DataReader instance, "
+                f"got {type(actual_reader).__name__}"
+            )
+
+        # Validate anomaly_detector
+        if not isinstance(anomaly_detector, AnomalyDetector):
+            raise TypeError(
+                f"anomaly_detector must be an AnomalyDetector instance, "
+                f"got {type(anomaly_detector).__name__}"
+            )
+
+        # Validate data_writer (optional, but must be DataWriter if provided)
+        if data_writer is not None and not isinstance(data_writer, DataWriter):
+            raise TypeError(
+                f"data_writer must be a DataWriter instance or None, "
+                f"got {type(data_writer).__name__}"
+            )
+
         self.forecast_reader = forecast_reader
         self.actual_reader = actual_reader
         self.anomaly_detector = anomaly_detector
