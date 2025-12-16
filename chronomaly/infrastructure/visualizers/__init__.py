@@ -2,4 +2,6 @@
 Visualization components.
 """
 
-__all__ = []
+from .timeseries import TimeSeriesVisualizer
+
+__all__ = ["TimeSeriesVisualizer"]
