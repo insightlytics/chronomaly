@@ -27,6 +27,9 @@ class EmailNotifier(Notifier, TransformableMixin):
 
     Args:
         to: Recipient email address(es). Can be a single email or list of emails.
+        template_path: Path to HTML email template file. The template must contain
+                      the required {table} placeholder. Optional placeholders are
+                      {count} and {plural}. See email_template.html for reference.
         subject: Optional custom email subject. Supports date template variables:
                 - {date} - Date from anomaly data in YYYY-MM-DD format
                 - {date:FORMAT} - Anomaly date with custom strftime format
@@ -48,6 +51,7 @@ class EmailNotifier(Notifier, TransformableMixin):
     def __init__(
         self,
         to: list[str] | str,
+        template_path: str,
         subject: Optional[str] = None,
         transformers: Optional[Dict[str, list[Callable]]] = None,
         chart_data_reader: Optional[Any] = None,
@@ -67,6 +71,12 @@ class EmailNotifier(Notifier, TransformableMixin):
         self.transformers: dict[str, list[Callable]] = transformers or {}
         self.chart_data_reader: Any | None = chart_data_reader
         self._subject_template: str | None = subject
+
+        # Load and validate template (fail fast)
+        import os
+
+        self._template_content = self._load_and_validate_template(template_path)
+        self._template_path = os.path.abspath(template_path)
 
         # Get SMTP configuration from internal method
         smtp_config = self._get_smtp_config()
@@ -135,6 +145,71 @@ class EmailNotifier(Notifier, TransformableMixin):
                 "From email address is required. "
                 "Set SMTP_FROM_EMAIL or SMTP_USER environment variable."
             )
+
+    def _load_and_validate_template(self, template_path: str) -> str:
+        """
+        Load and validate HTML email template from file.
+
+        Validates that:
+        - File path is not empty
+        - File exists at the provided path
+        - File is readable
+        - File contains valid content
+        - Required {table} placeholder is present
+
+        Args:
+            template_path: Path to the HTML template file
+
+        Returns:
+            str: The loaded template content
+
+        Raises:
+            ValueError: If template_path is empty or missing {table} placeholder
+            FileNotFoundError: If template file does not exist
+            PermissionError: If template file is not readable
+            RuntimeError: If template file read fails
+        """
+        import os
+
+        # Validate path is not empty
+        if not template_path:
+            raise ValueError("template_path cannot be empty")
+
+        # Resolve to absolute path
+        abs_path = os.path.abspath(template_path)
+
+        # Check if file exists
+        if not os.path.isfile(abs_path):
+            raise FileNotFoundError(f"Email template file not found: {abs_path}")
+
+        # Check if file is readable
+        if not os.access(abs_path, os.R_OK):
+            raise PermissionError(
+                f"Email template file is not readable: {abs_path}"
+            )
+
+        # Load template content
+        try:
+            with open(abs_path, "r", encoding="utf-8") as f:
+                template_content = f.read()
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to read template file '{abs_path}': {str(e)}"
+            ) from e
+
+        # Validate template is not empty
+        if not template_content.strip():
+            raise ValueError(f"Email template file is empty: {abs_path}")
+
+        # Validate required placeholders are present
+        # Only {table} is required - {count} and {plural} are optional
+        if "{table}" not in template_content:
+            raise ValueError(
+                "Email template is missing required placeholder: {table}. "
+                "This placeholder is required to display anomaly data."
+            )
+
+        return template_content
 
     def _get_email_subject(self, anomaly_date: Optional[datetime] = None) -> str:
         """
@@ -452,90 +527,23 @@ class EmailNotifier(Notifier, TransformableMixin):
             table_html += "</tr>"
         table_html += "</tbody></table>"
 
-        # Email header with CSS
-        html = """
-        <html>
-        <head>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    background-color: #f5f5f5;
-                    padding: 20px;
-                }}
-                .container {{
-                    background-color: white;
-                    padding: 30px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                    overflow-x: auto;
-                }}
-                h1 {{
-                    color: #333;
-                    margin-bottom: 10px;
-                }}
-                .summary {{
-                    color: #666;
-                    margin-bottom: 20px;
-                    font-size: 14px;
-                }}
-                .anomaly-table {{
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin-top: 20px;
-                }}
-                .anomaly-table th {{
-                    background-color: #4CAF50;
-                    color: white;
-                    padding: 12px;
-                    text-align: left;
-                    font-weight: bold;
-                    white-space: nowrap;
-                }}
-                .anomaly-table td {{
-                    padding: 10px;
-                    border-bottom: 1px solid #ddd;
-                    vertical-align: middle;
-                }}
-                .anomaly-table tr:hover {{
-                    background-color: #f5f5f5;
-                }}
-                .chart-cell {{
-                    text-align: center;
-                    padding: 5px;
-                    width: 320px;
-                }}
-                .chart-img {{
-                    max-width: 300px;
-                    height: auto;
-                    border: 1px solid #ddd;
-                    border-radius: 4px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                }}
-                .footer {{
-                    margin-top: 30px;
-                    padding-top: 20px;
-                    border-top: 1px solid #ddd;
-                    color: #666;
-                    font-size: 12px;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>🚨 Anomaly Detection Alert</h1>
-                <div class="summary">
-                    <strong>{count}</strong> anomal{plural} detected
-                </div>
-                {table}
-                <div class="footer">
-                    This is an automated alert from Chronomaly anomaly detection system.
-                </div>
-            </div>
-        </body>
-        </html>
-        """.format(
-            count=len(df), plural="ies" if len(df) != 1 else "y", table=table_html
-        )
+        # Use loaded template instead of hardcoded HTML
+        try:
+            html = self._template_content.format(
+                count=len(df),
+                plural="ies" if len(df) != 1 else "y",
+                table=table_html,
+            )
+        except KeyError as e:
+            raise RuntimeError(
+                f"Template formatting failed. Unexpected placeholder: {str(e)}. "
+                f"Template file: {self._template_path}"
+            ) from e
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to format email template: {str(e)}. "
+                f"Template file: {self._template_path}"
+            ) from e
 
         return html
 

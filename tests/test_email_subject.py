@@ -5,6 +5,8 @@ This script tests various subject templates with date formatting.
 
 import os
 import pandas as pd
+import tempfile
+from pathlib import Path
 from datetime import datetime
 from chronomaly.infrastructure.notifiers import EmailNotifier
 
@@ -13,6 +15,25 @@ os.environ["SMTP_HOST"] = "smtp.test.com"
 os.environ["SMTP_USER"] = "test@example.com"
 os.environ["SMTP_PASSWORD"] = "testpassword"
 os.environ["SMTP_FROM_EMAIL"] = "test@example.com"
+
+# Create a temporary template file for testing
+# Note: Only {table} is required, {count} and {plural} are optional
+template_content = """<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; }}
+    </style>
+</head>
+<body>
+    <h1>Test Alert</h1>
+    <p><strong>{count}</strong> anomal{plural} detected</p>
+    {table}
+</body>
+</html>"""
+
+with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
+    f.write(template_content)
+    TEMPLATE_PATH = f.name
 
 # Create sample anomalies DataFrame
 anomalies_df = pd.DataFrame(
@@ -37,7 +58,7 @@ print()
 print("Test 1: Default subject (no subject parameter)")
 print("-" * 80)
 try:
-    notifier = EmailNotifier(to=["test@example.com"])
+    notifier = EmailNotifier(to=["test@example.com"], template_path=TEMPLATE_PATH)
     subject = notifier._get_email_subject()
     print(f"✓ Subject: '{subject}'")
     assert (
@@ -52,7 +73,11 @@ print()
 print("Test 2: Custom static subject")
 print("-" * 80)
 try:
-    notifier = EmailNotifier(to=["test@example.com"], subject="Custom Alert Subject")
+    notifier = EmailNotifier(
+        to=["test@example.com"],
+        template_path=TEMPLATE_PATH,
+        subject="Custom Alert Subject",
+    )
     subject = notifier._get_email_subject()
     print(f"✓ Subject: '{subject}'")
     assert subject == "Custom Alert Subject", "Subject should match custom text"
@@ -65,7 +90,11 @@ print()
 print("Test 3: Subject with {date} placeholder")
 print("-" * 80)
 try:
-    notifier = EmailNotifier(to=["test@example.com"], subject="Daily Report - {date}")
+    notifier = EmailNotifier(
+        to=["test@example.com"],
+        template_path=TEMPLATE_PATH,
+        subject="Daily Report - {date}",
+    )
     test_date = datetime(2025, 12, 2, 10, 30, 0)
     subject = notifier._get_email_subject(anomaly_date=test_date)
     expected_subject = "Daily Report - 2025-12-02"
@@ -81,7 +110,9 @@ print("Test 4: Subject with custom date format {date:%d.%m.%Y}")
 print("-" * 80)
 try:
     notifier = EmailNotifier(
-        to=["test@example.com"], subject="Günlük Rapor - {date:%d.%m.%Y}"
+        to=["test@example.com"],
+        template_path=TEMPLATE_PATH,
+        subject="Günlük Rapor - {date:%d.%m.%Y}",
     )
     test_date = datetime(2025, 12, 2, 10, 30, 0)
     subject = notifier._get_email_subject(anomaly_date=test_date)
@@ -104,3 +135,6 @@ print("- {date} placeholder: ✓")
 print("- {date:FORMAT} custom format: ✓")
 print()
 print("✓ All email subject customization features are working correctly!")
+
+# Cleanup template file
+Path(TEMPLATE_PATH).unlink(missing_ok=True)

@@ -357,7 +357,8 @@ anomalies_df = anomaly_workflow.run()
 # SMTP_FROM_EMAIL=alerts@example.com (optional, defaults to SMTP_USER)
 
 email_notifier = EmailNotifier(
-    to=["team@example.com", "manager@example.com"]
+    to=["team@example.com", "manager@example.com"],
+    template_path="email_template.html"  # Path to HTML template file
 )
 
 # Create and run notification workflow
@@ -379,6 +380,7 @@ from chronomaly.infrastructure.transformers.filters import ValueFilter
 # Configure email notifier with filters
 email_notifier = EmailNotifier(
     to=["team@example.com"],
+    template_path="email_template.html",
     transformers={
         'before': [
             # Only email actual anomalies (not IN_RANGE)
@@ -405,6 +407,7 @@ Send notifications to multiple channels simultaneously:
 # Configure multiple notifiers
 critical_email = EmailNotifier(
     to=["oncall@example.com"],
+    template_path="email_template.html",
     transformers={
         'before': [
             # Only critical anomalies (>20% deviation)
@@ -416,6 +419,7 @@ critical_email = EmailNotifier(
 
 team_email = EmailNotifier(
     to=["analytics-team@example.com"],
+    template_path="email_template.html",
     transformers={
         'before': [
             # All anomalies (>5% deviation)
@@ -452,6 +456,69 @@ SMTP_USE_TLS=True  # Optional, defaults to True
 1. Enable 2-factor authentication
 2. Generate an [App Password](https://support.google.com/accounts/answer/185833)
 3. Use the app password as `SMTP_PASSWORD`
+
+#### Email Template Configuration
+
+The `EmailNotifier` requires an HTML template file for email formatting. A default template is provided in the repository root (`email_template.html`).
+
+**Using the Default Template**:
+```python
+email_notifier = EmailNotifier(
+    to=["alerts@example.com"],
+    template_path="email_template.html"
+)
+```
+
+**Template Requirements**:
+
+Your HTML template must include this required placeholder:
+- `{table}` - The HTML table with anomaly data (auto-generated) **[REQUIRED]**
+
+Optional placeholders you can use:
+- `{count}` - Number of anomalies detected
+- `{plural}` - "y" or "ies" for grammatically correct pluralization
+
+**Customizing the Template**:
+
+1. Copy `email_template.html` to your preferred location
+2. Modify the HTML and CSS to match your branding
+3. Keep the required `{table}` placeholder (optional: `{count}`, `{plural}`)
+4. Use double curly braces `{{` for CSS (e.g., `body {{ color: red; }}`)
+
+**Example Custom Template**:
+```html
+<html>
+<head>
+    <style>
+        body {{ font-family: "Helvetica Neue", sans-serif; }}
+        .header {{ background-color: #1a73e8; color: white; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>My Company - Anomaly Alert</h1>
+    </div>
+    <p>Found <strong>{count}</strong> anomal{plural}</p>
+    {table}
+    <footer>© 2025 My Company</footer>
+</body>
+</html>
+```
+
+**Template Location**:
+
+Templates can be stored anywhere:
+```python
+# Relative path from current directory
+EmailNotifier(to="user@example.com", template_path="./templates/email.html")
+
+# Absolute path
+EmailNotifier(to="user@example.com", template_path="/etc/myapp/email_template.html")
+
+# From environment variable
+import os
+EmailNotifier(to="user@example.com", template_path=os.getenv("EMAIL_TEMPLATE_PATH"))
+```
 
 ---
 
