@@ -19,8 +19,6 @@ class EmailNotifier(Notifier, TransformableMixin):
     Email notifier for sending anomaly alerts via SMTP.
 
     Sends HTML-formatted emails with anomaly data presented as a styled table.
-    Optionally includes line charts for anomalous metrics when
-    chart_data_reader is provided.
     Supports multiple recipients and filtering via transformers.
 
     SMTP credentials are read from environment variables.
@@ -39,17 +37,13 @@ class EmailNotifier(Notifier, TransformableMixin):
                            These can be used in the template with Jinja2 syntax.
                            Reserved names (table, count, plural) are silently ignored.
         transformers: Optional transformers to apply before notification
-        chart_data_reader: Optional DataReader for loading historical
-                          time series data. Metric names from anomalies must
-                          match column names in the chart data. Charts are
-                          generated as line plots and embedded in the email.
 
     Note:
         SMTP configuration is read from environment variables.
         Email subject can be customized via the subject parameter.
 
-        For charts to work correctly, group_key names in anomalies_df['group_key'] must
-        exactly match column names in the pivoted chart data.
+        Charts can be included by adding a column with HTML img tags via transformers.
+        Use TimeSeriesVisualizer to generate base64 chart images.
     """
 
     def __init__(
@@ -59,7 +53,6 @@ class EmailNotifier(Notifier, TransformableMixin):
         subject: Optional[str] = None,
         template_variables: Optional[Dict[str, Any]] = None,
         transformers: Optional[Dict[str, list[Callable]]] = None,
-        chart_data_reader: Optional[Any] = None,
     ):
         # Validate and normalize recipients
         if isinstance(to, str):
@@ -74,7 +67,6 @@ class EmailNotifier(Notifier, TransformableMixin):
             raise TypeError("'to' must be a string or list of strings")
 
         self.transformers: dict[str, list[Callable]] = transformers or {}
-        self.chart_data_reader: Any | None = chart_data_reader
         self._subject_template: str | None = subject
         self._template_variables: dict[str, Any] = template_variables or {}
 
@@ -268,107 +260,6 @@ class EmailNotifier(Notifier, TransformableMixin):
 
         return subject
 
-    def _create_line_chart(self, metric_name: str, data: pd.Series) -> str:
-        """
-        Create a line chart for a single metric and return as base64 string.
-
-        Args:
-            metric_name: Name of the metric
-            data: Time series data (Series with DatetimeIndex)
-
-        Returns:
-            str: Base64-encoded PNG image
-        """
-        import matplotlib
-
-        matplotlib.use("Agg")  # Non-interactive backend
-        import matplotlib.pyplot as plt
-        import matplotlib.dates
-        from matplotlib.ticker import EngFormatter
-        import io
-        import base64
-
-        # Create figure
-        plt.figure(figsize=(8, 4.5))
-
-        # Plot line chart with markers
-        plt.plot(
-            data.index,
-            data.values,
-            marker="o",
-            linewidth=2,
-            markersize=6,
-            color="#2E86AB",
-        )
-
-        # Grid
-        plt.grid(True, alpha=0.3)
-
-        # Format x-axis dates
-        ax = plt.gca()
-        ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y-%m-%d"))
-        ax.xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=2))
-        plt.xticks(rotation=45, ha="right")
-
-        # Format y-axis with k, M, G suffixes for large numbers
-        ax.yaxis.set_major_formatter(EngFormatter())
-
-        # Tight layout
-        plt.tight_layout()
-
-        # Convert to base64
-        buffer = io.BytesIO()
-        plt.savefig(buffer, format="png", dpi=75, bbox_inches="tight")
-        buffer.seek(0)
-        image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
-        plt.close()
-
-        return image_base64
-
-    def _generate_charts(self, anomalies_df: pd.DataFrame) -> Dict[str, str]:
-        """
-        Generate line charts for anomalous metrics.
-
-        Args:
-            anomalies_df: DataFrame containing anomaly data with 'group_key' column
-
-        Returns:
-            dict: Mapping of metric names to base64-encoded chart images
-        """
-        if self.chart_data_reader is None:
-            return {}
-
-        # Load chart data
-        try:
-            chart_data = self.chart_data_reader.load()
-        except Exception:
-            # If chart data loading fails, skip charts
-            return {}
-
-        # Get unique group_keys from anomalies
-        anomalous_metrics = anomalies_df["group_key"].unique()
-
-        # Generate charts for each metric
-        charts = {}
-        for metric in anomalous_metrics:
-            # Check if metric exists in chart data columns
-            if metric in chart_data.columns:
-                metric_data = chart_data[metric]
-
-                # Skip if all NaN
-                if metric_data.notna().any():
-                    try:
-                        chart_base64 = self._create_line_chart(metric, metric_data)
-                        charts[metric] = chart_base64
-                    except (ValueError, TypeError, RuntimeError) as e:
-                        import warnings
-
-                        warnings.warn(
-                            f"Failed to generate chart for metric '{metric}': {str(e)}"
-                        )
-                        continue
-
-        return charts
 
     def notify(self, payload: Dict[str, Any]) -> None:
         """
@@ -418,10 +309,6 @@ class EmailNotifier(Notifier, TransformableMixin):
         # Store anomaly_date for use in _send_email
         self._current_anomaly_date = anomaly_date
 
-        # Generate charts BEFORE applying transformers (need group_key column)
-        # Charts are generated using original anomalies_df with all columns
-        charts = self._generate_charts(anomalies_df)
-
         # Apply transformers (e.g., filter only significant anomalies, select columns)
         filtered_df = self._apply_transformers(anomalies_df, "before")
 
@@ -429,42 +316,23 @@ class EmailNotifier(Notifier, TransformableMixin):
         if filtered_df.empty:
             return
 
-        # Create a mapping of row data to charts
-        # If group_key column exists in filtered_df, use it; otherwise use row index
-        if "group_key" in filtered_df.columns:
-            # Standard case: group_key column present
-            chart_mapping = charts
-        else:
-            # group_key column removed by transformer: map by row index using original df
-            chart_mapping = {}
-            for idx, row in filtered_df.iterrows():
-                # Find corresponding group_key in original df
-                if idx in anomalies_df.index and "group_key" in anomalies_df.columns:
-                    group_key = anomalies_df.loc[idx, "group_key"]
-                    if group_key in charts:
-                        chart_mapping[idx] = charts[group_key]
-
         # Generate HTML email content
-        html_body = self._generate_html_body(filtered_df, chart_mapping)
+        html_body = self._generate_html_body(filtered_df)
 
         # Send email
         self._send_email(html_body)
 
-    def _generate_html_body(
-        self, df: pd.DataFrame, charts: Optional[Dict[str, str]] = None
-    ) -> str:
+    def _generate_html_body(self, df: pd.DataFrame) -> str:
         """
-        Generate HTML email body with styled table and optional charts.
+        Generate HTML email body with styled table.
 
         Args:
-            df: DataFrame with anomaly data
-            charts: Optional dict mapping metric names to base64-encoded chart images
+            df: DataFrame with anomaly data. Charts can be included as a column
+                with HTML img tags via transformers.
 
         Returns:
             str: HTML content
         """
-        charts = charts or {}
-
         # Helper function to format numeric values
         def format_value(val: Any) -> str:
             if pd.isna(val):
@@ -495,8 +363,6 @@ class EmailNotifier(Notifier, TransformableMixin):
         table_html += "<thead><tr>"
         for col in df.columns:
             table_html += f"<th>{col}</th>"
-        if charts:
-            table_html += "<th>Chart</th>"
         table_html += "</tr></thead>"
 
         # Table body
@@ -513,33 +379,6 @@ class EmailNotifier(Notifier, TransformableMixin):
                     table_html += f'<td style="{style}">{formatted_val}</td>'
                 else:
                     table_html += f"<td>{formatted_val}</td>"
-
-            # Add chart column if charts exist
-            if charts:
-                # Try to get chart by group_key name first, then by index
-                chart_base64 = None
-                chart_key = None
-
-                if "group_key" in df.columns:
-                    # Standard case: use group_key column
-                    group_key_name = row.get("group_key", "")
-                    if group_key_name in charts:
-                        chart_base64 = charts[group_key_name]
-                        chart_key = group_key_name
-                else:
-                    # group_key column removed: use row index
-                    if idx in charts:
-                        chart_base64 = charts[idx]
-                        chart_key = str(idx)
-
-                if chart_base64:
-                    table_html += (
-                        f'<td class="chart-cell">'
-                        f'<img src="data:image/png;base64,{chart_base64}" '
-                        f'alt="{chart_key}" class="chart-img" /></td>'
-                    )
-                else:
-                    table_html += '<td class="chart-cell">-</td>'
 
             table_html += "</tr>"
         table_html += "</tbody></table>"
